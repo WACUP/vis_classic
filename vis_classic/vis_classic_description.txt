@@ -1,0 +1,5 @@
+Name: Classic Spectrum Analyzer
+Comment:
+Accurate, detailed, customizable spectrum analyzer.
+Description:
+Accurate, detailed, customizable spectrum analyzer.  I decided to resurrect this plug-in that I originally coded in 1998.
