@@ -1,9 +1,9 @@
-#define PLUGIN_VERSION " v2.0"
+#define PLUGIN_VERSION " v2.0.1"
 #define CS_MODULE_TITLE "Classic Spectrum Analyzer" PLUGIN_VERSION
 
 void FFTInit(unsigned int nNewFft);
 void ConfigStereo(struct winampVisModule *);
-void OpenConfigStereoWindow(struct winampVisModule *);
+void OpenConfigStereoWindow();
 int AtAnStInit(struct winampVisModule *);
 void AtAnQuit(struct winampVisModule *);
 int AtAnStDirectRender(struct winampVisModule *);
@@ -13,7 +13,6 @@ void CalculateCommonVariables();
 //void (*CalculateVariables)();
 void CalculateVariablesStereo();
 void CalculateVariablesNull();
-//void (*PopupConfig)(struct winampVisModule *);
 
 //int (*LevelCalc)(int low, int high, int NumCh, unsigned char SpecData[2][576]);
 //int AverageLevelCalc(int low, int high, int NumCh, unsigned char SpecData[2][576]);
@@ -108,9 +107,8 @@ int SaveTempCurrentSettings(void);
 int SaveProfile(const wchar_t *cszProfile);
 void ValidateRectPosition(int nMax, LONG *pnLeft, LONG *pnRight);
 void AboutMessage(void);
-//void HandleFileError(int error);
 
-INT_PTR CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 BOOL ConfigDialog_Notify(HWND hwndDlg, LPARAM lParam);
 BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM);
 BOOL CALLBACK LevelDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM);

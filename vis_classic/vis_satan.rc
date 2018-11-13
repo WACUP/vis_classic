@@ -237,12 +237,6 @@ BEGIN
     LTEXT           "",IDC_STATICMESSAGE,8,164,220,43,SS_SUNKEN | NOT WS_GROUP
 END
 
-IDD_VIEW DIALOGEX 0, 0, 316, 183
-STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
-BEGIN
-END
-
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -268,8 +262,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,0,0,0
- PRODUCTVERSION 2,0,0,0
+ FILEVERSION 2,0,1,0
+ PRODUCTVERSION 2,0,1,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -286,12 +280,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "WACUP (WinAmp Community Update Project)"
             VALUE "FileDescription", "Winamp Visualization Plug-in"
-            VALUE "FileVersion", "2, 0, 0, 0"
+            VALUE "FileVersion", "2, 0, 1, 0"
             VALUE "InternalName", "Classic Spectrum Analyzer"
             VALUE "LegalCopyright", "Copyright © 1998-2018 Mike Lynch. Modifications by Darren Owen aka DrO © 2018"
             VALUE "OriginalFilename", "vis_classic.dll"
             VALUE "ProductName", "Classic Spectrum Analyzer"
-            VALUE "ProductVersion", "2, 0, 0, 0"
+            VALUE "ProductVersion", "2, 0, 1, 0"
         END
     END
     BLOCK "VarFileInfo"

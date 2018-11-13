@@ -22,7 +22,6 @@
 #define IDC_CLASSIC                     102
 #define IDC_LEFTSELECT                  102
 #define IDC_LOAD                        102
-#define IDD_VIEW                        102
 #define IDC_STATICMESSAGE               103
 #define IDC_SAVE                        103
 #define IDC_RIGHTSELECT                 103

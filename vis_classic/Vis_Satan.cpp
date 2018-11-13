@@ -54,10 +54,8 @@ TODO: faster file saving would be nice
 #include <malloc.h>
 #include <shlwapi.h>
 #include <stdlib.h>
-#include <nu/ServiceBuilder.h>
 #ifdef WACUP_BUILD
 #include <winamp/wa_cup.h>
-#include <loader/hook/get_api_service.h>
 #include <loader/loader/utils.h>
 #include <loader/loader/paths.h>
 #endif
@@ -77,15 +75,13 @@ TODO: faster file saving would be nice
 #include "resource.h"
 #include "api.h"
 
-// TODO add to lang.h
-// {0D1DA5F5-FD41-4934-B75A-B8455EE19F82}
-static const GUID VisCSAGUID = 
-{ 0xd1da5f5, 0xfd41, 0x4934, { 0xb7, 0x5a, 0xb8, 0x45, 0x5e, 0xe1, 0x9f, 0x82 } };
-
 // this is used to identify the skinned frame to allow for embedding/control by modern skins if needed
-// {BB74178A-E82D-4b2c-8F36-F4C3123343EA}
+// note: this is taken from vis_milk2 so that by having a GUID on the window, the embedding of ths vis
+//		 window will work which if we don't set a guid is fine but that prevents other aspects of the
+//		 skin being able to work out / interact with the window correctly (gen_ff is horrible at times)
+// {0000000A-000C-0010-FF7B-01014263450C}
 static const GUID embed_guid = 
-{ 0xbb74178a, 0xe82d, 0x4b2c, { 0x8f, 0x36, 0xf4, 0xc3, 0x12, 0x33, 0x43, 0xea } };
+{ 10, 12, 16, { 255, 123, 1, 1, 66, 99, 69, 12 } };
 
 // bitmaps store RGB components in the opposite of the COLORREF definition
 #define bmpRGB(r, g ,b) ((DWORD) (((BYTE) (b) | ((WORD) (g) << 8)) | (((DWORD) (BYTE) (r)) << 16)))
@@ -174,6 +170,7 @@ static const GUID embed_guid =
 
 #define TEXT_ENCRYPT_KEY 542
 
+const wchar_t *cszClassName = L"ClassicSpectrum";
 const wchar_t *cszIniMainSection = L"Classic Analyzer";
 const wchar_t *cszProfileDirectory = L"vis_classic";
 const wchar_t *cszIniFilename = L"Plugins\\vis_classic.ini";
@@ -189,11 +186,7 @@ const wchar_t *cszDefaultProfileMessage = L"Click on a profile to load it (any c
 										  L"to re-load the Current Settings (any changes will be discarded).";
 const int cnProfileNameBufLen = MAX_PROFILE_NAME_LENGTH + 1;
 
-LRESULT CALLBACK EmdedWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
-							  UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
-
 api_service* WASABI_API_SVC = NULL;
-//api_application *WASABI_API_APP = NULL;
 api_language* WASABI_API_LNG = NULL;
 HINSTANCE WASABI_API_LNG_HINST = 0,
 		  WASABI_API_ORIG_HINST = 0;
@@ -265,8 +258,7 @@ void (*PeakLevelEffect)(void) = PeakLevelNormal;
 unsigned char (*BarColourScheme)(int level, int y) = BarColourClassic;
 unsigned char (*PeakColourScheme)(int level, int y) = PeakColourFade;
 HWND hatan = NULL, config_win = NULL, hwndCurrentConfigProperty = NULL;
-HMENU hmenu = NULL;
-HMENU popupmenu = NULL;
+HMENU hmenu = NULL, popupmenu = NULL;
 embedWindowState myWindowState = {0};
 wchar_t szMainIniFilename[MAX_PATH] = {0};
 wchar_t szCurrentProfile[MAX_PATH] = {0};
@@ -284,30 +276,6 @@ bool bFftEqualize = true;
 float fFftEnvelope = 0.2f;
 float fFftScale = 2.0f;
 
-void SetupServices(winampVisModule *this_mod)
-{
-#ifdef WACUP_BUILD
-	WASABI_API_SVC = GetServiceAPIPtr();
-#else
-	// load all of the required wasabi services from the winamp client
-	WASABI_API_SVC = reinterpret_cast<api_service*>(SendMessage(plugin.hwndParent, WM_WA_IPC, 0, IPC_GET_API_SERVICE));
-	if (WASABI_API_SVC == reinterpret_cast<api_service*>(1)) WASABI_API_SVC = NULL;
-#endif
-	if (WASABI_API_SVC != NULL)
-	{
-		if (WASABI_API_LNG == NULL)
-		{
-			ServiceBuild(WASABI_API_SVC, WASABI_API_LNG, languageApiGUID);
-			WASABI_API_START_LANG(this_mod->hDllInstance, VisCSAGUID);
-	}
-
-		/*if (WASABI_API_APP == NULL)
-		{
-			ServiceBuild(WASABI_API_SVC, WASABI_API_APP, applicationApiServiceGuid);
-		}*/
-	}
-}
-
 void FFTInit(unsigned int nNewFft)
 {
 	if(nNewFft > 0 && nNewFft != nFftFrequencies) {
@@ -320,10 +288,8 @@ void FFTInit(unsigned int nNewFft)
 	m_fft.Init(576, nFftFrequencies, bFftEqualize ? 1 : 0, fFftEnvelope);
 }
 
-void ConfigStereo(winampVisModule *this_mod)
+void ConfigStereo(winampVisModule * /*this_mod*/)
 {
-	SetupServices(this_mod);
-
 	// if plugin is open, post a message to open properties in the window's thread
 	if(IsWindow(hatan))
 		PostMessage(hatan, WM_OPEN_PROPERTYWIN, 0, 0);
@@ -334,7 +300,7 @@ void ConfigStereo(winampVisModule *this_mod)
 		// if settings can't be loaded, save the default
 		LoadCurrentProfileOrCreateDefault();
 		// open the properties
-		OpenConfigStereoWindow(this_mod);
+		OpenConfigStereoWindow();
 	} else {
 		HWND hParent = GetParent(hwndCurrentConfigProperty);
 		if(IsWindow(hParent))
@@ -343,14 +309,14 @@ void ConfigStereo(winampVisModule *this_mod)
 }
 
 // Config for Stereo Classic Analyzer
-void OpenConfigStereoWindow(winampVisModule *this_mod)
+void OpenConfigStereoWindow()
 {
 	// make sure WM_CLOSE_PROPERTYWIN will be posted
 	bPostCloseConfig = true;
 
 	// show the property page
 	//if(!IsWindow(config_win)) {
-	if(!config_win) {
+	if(!IsWindow(config_win)) {
 		// winamp does this for us already
 		/*INITCOMMONCONTROLSEX icce = {sizeof(INITCOMMONCONTROLSEX), ICC_BAR_CLASSES};
 		InitCommonControlsEx(&icce);*/
@@ -397,7 +363,7 @@ void OpenConfigStereoWindow(winampVisModule *this_mod)
 		psh.dwSize        = sizeof (PROPSHEETHEADER);
 		psh.dwFlags       = PSH_NOAPPLYNOW | PSH_PROPTITLE | PSH_PROPSHEETPAGE | PSH_NOCONTEXTHELP;
 		psh.hInstance     = WASABI_API_LNG_HINST;
-		psh.hwndParent    = this_mod->hwndParent;
+		psh.hwndParent    = AtAnSt_Vis_mod.hwndParent;
 
 		// TODO localise
 		psh.pszCaption    = L"Classic Spectrum Analyzer";
@@ -421,11 +387,7 @@ void OpenConfigStereoWindow(winampVisModule *this_mod)
 // init for the stereo attached analyser
 int AtAnStInit(winampVisModule *this_mod)
 {
-	SetupServices(this_mod);
-
 	if(IsWindow(hwndCurrentConfigProperty)) {
-		//HWND hParent = GetParent(hwndCurrentConfigProperty);
-		//MessageBox(hParent, "Please close the properties window before starting the plug-in.", "Configure is open!", MB_OK);
 		PostMessage(hwndCurrentConfigProperty, WM_CONFIG_OPEN_ERROR, 0, 0);
 		return -1;
 	}
@@ -437,7 +399,6 @@ int AtAnStInit(winampVisModule *this_mod)
 
 	m_rand.seed(TEXT_ENCRYPT_KEY);
 
-	// TODO use wacup version
 	// makes an absolute path to the ini file
 #ifdef WACUP_BUILD
 	PathCombine(szMainIniFilename, get_paths()->settings_dir, cszIniFilename);
@@ -445,98 +406,91 @@ int AtAnStInit(winampVisModule *this_mod)
 	PathCombine(szMainIniFilename, (wchar_t*)SendMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_GETINIDIRECTORYW), cszIniFilename);
 #endif
 
-	// default to under Winamp
-	RECT rWinamp;
-	GetWindowRect(this_mod->hwndParent, &rWinamp);
-	myWindowState.r.left = rWinamp.left;
-	myWindowState.r.top = rWinamp.bottom;
-	myWindowState.r.right = rWinamp.right;
-	myWindowState.r.bottom = rWinamp.bottom + 100;
-	myWindowState.flags |= EMBED_FLAGS_SCALEABLE_WND;	// double-size support!
-	
-	// load saved window position
-	LoadWindowPostion(&myWindowState.r);
-	
-	// this sets a GUID which can be used in a modern skin / other parts of Winamp to
-	// indentify the embedded window frame such as allowing it to activated in a skin
-	SET_EMBED_GUID((&myWindowState), embed_guid);
-
-	myWindowState.flags |= EMBED_FLAGS_NOTRANSPARENCY | EMBED_FLAGS_NOWINDOWMENU;
-	HWND (*e)(embedWindowState *v);
-	*(void**)&e = (void *)SendMessage(this_mod->hwndParent,WM_WA_IPC,(LPARAM)0,IPC_GET_EMBEDIF);
-	if (e)
+	HWND (*embed)(embedWindowState *v);
+	*(void**)&embed = (void *)SendMessage(this_mod->hwndParent, WM_WA_IPC, (LPARAM)0, IPC_GET_EMBEDIF);
+	if(embed)
 	{
-		myWindowState.flags |= EMBED_FLAGS_SCALEABLE_WND;
-		HWND parent = e(&myWindowState);
-		if (IsWindow(parent))
-		{
+		// default to under Winamp
+		RECT rWinamp = {0};
+		GetWindowRect(this_mod->hwndParent, &rWinamp);
+		myWindowState.r.left = rWinamp.left;
+		myWindowState.r.top = rWinamp.bottom;
+		myWindowState.r.right = rWinamp.right;
+		myWindowState.r.bottom = rWinamp.bottom + 100;
+
+		// load saved window position
+		LoadWindowPostion(&myWindowState.r);
+
+		// this sets a GUID which can be used in a modern skin / other parts of Winamp to
+		// indentify the embedded window frame such as allowing it to activated in a skin
+		SET_EMBED_GUID((&myWindowState), embed_guid);
+		myWindowState.flags |= EMBED_FLAGS_SCALEABLE_WND;	// double-size support!
+		myWindowState.flags |= EMBED_FLAGS_NOTRANSPARENCY | EMBED_FLAGS_NOWINDOWMENU;
+
+		HWND parent = embed(&myWindowState);
+		if (IsWindow(parent)) {
 			// TODO localise
 			SetWindowText(myWindowState.me, L"Classic Spectrum Analyzer"); // set window title
 
-			hatan = CreateDialogParamW(this_mod->hDllInstance, MAKEINTRESOURCEW(IDD_VIEW),
-									   parent, AtAnWndProc, (LPARAM)this_mod);
-			if(!IsWindow(hatan)) {
-				//MessageBoxA(this_mod->hwndParent, "Could not create window, sorry but this is serious!", "Uh Oh", MB_OK);
-			return 1;
-		}
+			//register window class
+			WNDCLASS wc = {0};
+			wc.lpfnWndProc = AtAnWndProc;
+			wc.hInstance = this_mod->hDllInstance;
+			wc.lpszClassName = cszClassName;
 
-			// just to be certain if the skinned preferences support is installed
-			// we want to ensure that we're not going to have it touch our window
-			// as it can otherwise cause some occassional drawing issues/clashes.
-			SetPropW(hatan, L"SKPrefs_Ignore", (HANDLE)1);
+			if(RegisterClass(&wc)) {
+				hatan = CreateWindow(cszClassName, L"Classic Spectrum Analyzer", WS_VISIBLE |
+									 WS_CHILDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_TABSTOP,
+									 0, 0, 0, 0, parent, NULL, this_mod->hDllInstance, 0);
 
-	SetWindowLong(hatan, GWL_USERDATA, (LONG)this_mod); // set our user data to a "this" pointer
-			SendMessage(AtAnSt_Vis_mod.hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);
+				if(!IsWindow(hatan)) {
+					UnregisterClass(cszClassName, this_mod->hDllInstance);
+					return 1;
+				}
 
-			SetWindowSubclass(parent, EmdedWndProc, (UINT_PTR)EmdedWndProc, 0);
+				SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);
 
-			// this needs to be called so the created window will be processed in the Ctrl+Tab loop
-			//WASABI_API_APP->app_registerGlobalWindow(parent);
+				// assign popup menu
+				hmenu = LoadMenu(this_mod->hDllInstance, MAKEINTRESOURCE(IDM_POPUP));
+				popupmenu = GetSubMenu(hmenu, 0);
 
-	// assign popup menu
-			hmenu = WASABI_API_LOADMENUW(IDM_POPUP);
-			if (IsMenu(hmenu))
-			{
-	popupmenu = GetSubMenu(hmenu, 0);
+				// create the drawing buffer and initialize to 0
+				image_width = GetSystemMetrics(SM_CXSCREEN);
+				rgbbuffer = (COLORREF *)calloc(image_width * MAX_WIN_HEIGHT, sizeof(COLORREF));
+
+				// allocate bar colour lookup and peak table memory
+				colour_lookup[0] = 0; // no colour painted for a level of zero
+				colour_lookup[1] = 0;
+				peak_lookup[0] = 0;
+				peak_lookup[1] = 0;
+				for(int i = 1; i < 256; i++) {
+					colour_lookup[i] = new unsigned char[i];
+					peak_lookup[i] = new unsigned char[256];
+				}
+
+				// description for the DIBbits buffer (rgbbuffer)
+				bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+				bmi.bmiHeader.biWidth = image_width;
+				bmi.bmiHeader.biHeight = MAX_WIN_HEIGHT;
+				bmi.bmiHeader.biPlanes = 1;
+				bmi.bmiHeader.biBitCount = 32;
+				bmi.bmiHeader.biCompression = BI_RGB;
+				bmi.bmiHeader.biXPelsPerMeter = 100;
+				bmi.bmiHeader.biYPelsPerMeter = 100;
+
+				// use the Stereo variable calculation
+				CalculateVariables = CalculateVariablesStereo;
+
+				// load or make default settings
+				LoadCurrentProfileOrCreateDefault();
+
+				m_rand.seed(GetTickCount());
+
+				// show the window
+				ShowWindow(parent, SW_SHOWNORMAL);
+				return 0;
 			}
-
-	// create the drawing buffer and initialize to 0
-	image_width = GetSystemMetrics(SM_CXSCREEN);
-	//rgbbuffer = (COLORREF *)malloc(sizeof(COLORREF) * image_width * MAX_WIN_HEIGHT);
-	rgbbuffer = new COLORREF[image_width * MAX_WIN_HEIGHT];
-	ZeroMemory(&rgbbuffer[0], image_width * MAX_WIN_HEIGHT * sizeof(COLORREF));
-
-	// allocate bar colour lookup and peak table memory
-	colour_lookup[0] = 0; // no colour painted for a level of zero
-	colour_lookup[1] = 0;
-	peak_lookup[0] = 0;
-	peak_lookup[1] = 0;
-	for(int i = 1; i < 256; i++) {
-		colour_lookup[i] = new unsigned char[i];
-		peak_lookup[i] = new unsigned char[256];
-	}
-
-	// description for the DIBbits buffer (rgbbuffer)
-	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-	bmi.bmiHeader.biWidth = image_width;
-	bmi.bmiHeader.biHeight = MAX_WIN_HEIGHT;
-	bmi.bmiHeader.biPlanes = 1;
-	bmi.bmiHeader.biBitCount = 32;
-	bmi.bmiHeader.biCompression = BI_RGB;
-	bmi.bmiHeader.biXPelsPerMeter = 100;
-	bmi.bmiHeader.biYPelsPerMeter = 100;
-
-	// use the Stereo variable calcualtion
-	CalculateVariables = CalculateVariablesStereo;
-
-	// load or make default settings
-	LoadCurrentProfileOrCreateDefault();
-
-	// show the window
-	ShowWindow(parent, SW_SHOWNORMAL);
-	m_rand.seed(GetTickCount());
-	return 0;
-}
+		}
 	}
 	return -1;
 }
@@ -550,26 +504,32 @@ void AtAnQuit(winampVisModule *this_mod)
 	WritePrivateProfileInt(cszIniMainSection, L"WindowPosBottom", myWindowState.r.bottom, szMainIniFilename);
 
 	// close the config window with property exit code (changes will be lost)
-	if(config_win)
+	if(IsWindow(config_win))
 		SendMessage(hatan, WM_CLOSE_PROPERTYWIN, PROP_WIN_EXIT, 0);
 
 	// remove vis window, NOTE: THIS IS BAD AND NOT NEEDED EVIDENTLY
-	//if(IsWindow(this_mod->hwndParent))
-	//	SendMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_SETVISWND);
+	if(IsWindow(this_mod->hwndParent))
+		PostMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_SETVISWND);
 
 	if(IsMenu(hmenu))
-	DestroyMenu(hmenu);
+		DestroyMenu(hmenu);
 
-	if(IsWindow(myWindowState.me))
+	if(IsWindow(myWindowState.me)) {
 		DestroyWindow(myWindowState.me);
+		myWindowState.me = NULL;
+	}
 
-	if(IsWindow(hatan))
+	if(IsWindow(hatan)) {
 		DestroyWindow(hatan);
+		hatan = NULL;
+	}
+
+	UnregisterClass(cszClassName, this_mod->hDllInstance);
 
 	m_fft.CleanUp();
 
 	if(rgbbuffer) {
-	delete[] rgbbuffer;
+		free(rgbbuffer);
 		rgbbuffer = NULL;
 	}
 
@@ -582,8 +542,9 @@ void AtAnQuit(winampVisModule *this_mod)
 	if(caSpectrumData[1])
 		delete[] caSpectrumData[1];
 
-	ServiceRelease(WASABI_API_SVC, WASABI_API_LNG, languageApiGUID);
-	//ServiceRelease(WASABI_API_SVC, WASABI_API_APP, applicationApiServiceGuid);
+	SetFocus(this_mod->hwndParent);
+	SetActiveWindow(this_mod->hwndParent);
+	SetForegroundWindow(this_mod->hwndParent);
 }
 
 void FFTAnalyze(winampVisModule *this_mod)
@@ -686,19 +647,19 @@ int AtAnStDirectRender(winampVisModule *this_mod)
 		}
 	}
 
-  volume /= bands;  // make volume average of all bands calculated
+	volume /= bands;  // make volume average of all bands calculated
 
-  BackgroundDraw((unsigned char)volume);  // clear (draw) the background
+	BackgroundDraw((unsigned char)volume);  // clear (draw) the background
 
-  RenderBars(); // call the drawing function
+	RenderBars(); // call the drawing function
 
-  // now blt the generated mess to the window
-  HDC hdc = GetDC(hatan);
-  if (hdc != NULL) {
-  SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height, 0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
-  ReleaseDC(hatan,hdc);
-  }
-  return 0;
+	// now blt the generated mess to the window
+	HDC hdc = GetDC(hatan);
+	if (hdc != NULL) {
+		SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height, 0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
+		ReleaseDC(hatan,hdc);
+	}
+	return 0;
 }
 
 void CalculateAuxColours(void)
@@ -2283,78 +2244,18 @@ void PeakLevelSparks()
   }
 }
 
-bool ProcessMenuResult(UINT command, HWND parent)
+// window procedure for our window
+LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	switch (LOWORD(command))
-			{
-			// process selections for popup menu
-			case ID_VIS_CFG:
-			case CM_CONFIG:
-			{
-				AtAnSt_Vis_mod.Config(&AtAnSt_Vis_mod);
-				}
-			break;
-			case CM_PROFILES:
-			WASABI_API_DIALOGBOXW(IDD_SAVEOPTIONS, hatan, (DLGPROC)SaveDialogProc);
-			break;
-			case CM_CLOSE:
-			DestroyWindow(parent);
-			break;
-			case CM_ABOUT:
-				//MessageBox(hatan, cszAboutText, cszAboutCaption, MB_ICONINFORMATION);
-				AboutMessage();
-			break;
-			case ID_VIS_NEXT:
-				LoadNextProfile();
-				SaveDialog_UpdateProfilesProperty();
-				break;
-			case ID_VIS_PREV:
-				LoadPreviousProfile();
-				SaveDialog_UpdateProfilesProperty();
-				break;
-			case ID_VIS_RANDOM:
-			{	// keep random button unchecked
-				SendMessage(AtAnSt_Vis_mod.hwndParent, WM_WA_IPC, 0, IPC_CB_VISRANDOM);
-					// if not being asked about random state, load a random profile
-				if(HIWORD(command) != 0xFFFF) {
-					    LoadProfileNumber(m_rand.next() % CountProfileFiles());
-						SaveDialog_UpdateProfilesProperty();
-					}
-				}
-				break;
-			case ID_VIS_FS:
-				break;
-			case ID_VIS_MENU:
-				{
-					POINT pt;
-					if(GetCursorPos(&pt))
-#ifdef WACUP_BUILD
-					// we force the un-skinned version of the menu
-					// as us being on a different thread doesn't
-					// work with how the gen_ml skinning works
-					TrackPopup(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, parent, FALSE);
-#else
-					TrackPopupMenu(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, 0, parent, NULL);
-#endif
-			}
-			break;
-		default:
-			{
-				return false;
-			}
-	}
-	return true;
-}
-
-// window procedure for our embedded window
-LRESULT CALLBACK EmdedWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
-							  UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
-{
-	switch (message)
-	{
-		case WM_COMMAND:	// for what's handled from the accel table
+	switch (message) {
+		case WM_PAINT:
 		{
-			return ProcessMenuResult(wParam, hwnd);
+			PAINTSTRUCT ps = {0};
+			HDC hdc = BeginPaint(hwnd,&ps);   // BeginPaint clips to only the
+			EraseWindow(hdc);
+			SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height, 0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
+			EndPaint(hwnd,&ps);
+			return 0;
 		}
 		case WM_CONTEXTMENU:
 			{
@@ -2367,7 +2268,7 @@ LRESULT CALLBACK EmdedWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 				if (xPos == -1 || yPos == -1)
 				{
 					RECT rc = {0};
-					GetWindowRect(GetWindow(hwnd, GW_CHILD), &rc);
+					GetWindowRect(hwnd, &rc);
 					xPos = (short)rc.left;
 					yPos = (short)rc.top;
 				}
@@ -2383,60 +2284,82 @@ LRESULT CALLBACK EmdedWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 							   TPM_RIGHTBUTTON, xPos, yPos, 0, hwnd, NULL);
 #endif
 			}
-			break;
-	}
-	return DefSubclassProc(hwnd, message, wParam, lParam);
-}
-
-// window procedure for our window
-INT_PTR CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	switch (message) {
-		case WM_PAINT:
-			{
-				PAINTSTRUCT ps = {0};
-				HDC hdc = BeginPaint(hwnd,&ps);   // BeginPaint clips to only the
-				EraseWindow(hdc);
-				SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height, 0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
-				EndPaint(hwnd,&ps);
-			}
-			break;
-		case WM_ERASEBKGND:
-			{
-				return 1;
-				}
+			return 0;
+		case WM_DESTROY:
+			PostQuitMessage(0);
+			return 0;
 		case WM_KEYDOWN:  // fall through
 		case WM_KEYUP:
 		case WM_CHAR:
 		case WM_MOUSEWHEEL:
-			{	// get this_mod from our window's user data
-				winampVisModule *this_mod = (winampVisModule *)GetWindowLong(hwnd, GWL_USERDATA);
-				PostMessage(this_mod->hwndParent, message, wParam, lParam);
-			}
-			break;
+			PostMessage(AtAnSt_Vis_mod.hwndParent, message, wParam, lParam);
+			return 0;
 		case WM_WINDOWPOSCHANGED:
 			{	// update the window size
-				RECT r;
-				//GetWindowRect(hwnd, &r);
-				//myWindowState.r = r;
+				RECT r = {0};
 				GetClientRect(hwnd, &r);
 				win_width = r.right - r.left;
 				win_height = r.bottom - r.top;
 				CalculateAndUpdate();
 			}
-			break;
-		case WM_COMMAND:	// for what's handled from the accel table
-		{
-			return ProcessMenuResult(wParam, hwnd);
+			return 0;
+		case WM_COMMAND:
+			// process selections for popup menu
+			switch(LOWORD(wParam)) {
+			case ID_VIS_CFG:
+			case CM_CONFIG:
+				ConfigStereo(NULL);
+				return 0;
+			case CM_PROFILES:
+				DialogBox(AtAnSt_Vis_mod.hDllInstance, MAKEINTRESOURCE(IDD_SAVEOPTIONS), hatan, (DLGPROC)SaveDialogProc);
+				return 0;
+			case CM_CLOSE:
+				DestroyWindow(hwnd);
+				return 0;
+			case CM_ABOUT:
+				AboutMessage();
+				return 0;
+			case ID_VIS_NEXT:
+				LoadNextProfile();
+				SaveDialog_UpdateProfilesProperty();
+				break;
+			case ID_VIS_PREV:
+				LoadPreviousProfile();
+				SaveDialog_UpdateProfilesProperty();
+				break;
+			case ID_VIS_RANDOM:
+				{	// keep random button unchecked
+					SendMessage(AtAnSt_Vis_mod.hwndParent, WM_WA_IPC, 0, IPC_CB_VISRANDOM);
+					// if not being asked about random state, load a random profile
+					if(HIWORD(wParam) != 0xFFFF) {
+					    LoadProfileNumber(m_rand.next() % CountProfileFiles());
+						SaveDialog_UpdateProfilesProperty();
+					}
+				}
+				break;
+			case ID_VIS_FS:
+				break;
+			case ID_VIS_MENU:
+				{
+					POINT pt = {0};
+					if(GetCursorPos(&pt))
+#ifdef WACUP_BUILD
+						// we force the un-skinned version of the menu
+						// as us being on a different thread doesn't
+						// work with how the gen_ml skinning works
+						TrackPopup(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, hwnd, FALSE);
+#else
+						TrackPopupMenu(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, 0, hwnd, NULL);
+#endif
+				}
+				return 0;
 			}
-		case WM_DESTROY:
-			PostQuitMessage(0);
 			break;
 		case WM_OPEN_PROPERTYWIN:
-			OpenConfigStereoWindow((winampVisModule *)GetWindowLong(hwnd, GWL_USERDATA));
+			OpenConfigStereoWindow();
 			break;
 		case WM_CLOSE_PROPERTYWIN:
-			if(config_win) {
+			if(IsWindow(config_win)) {
 				DestroyWindow(config_win);
 				config_win = NULL;
 				hwndCurrentConfigProperty = NULL;
@@ -2445,10 +2368,10 @@ INT_PTR CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				else if(wParam == PROP_WIN_CANCEL)
 					LoadCurrentProfile();
 			}
-			break;
-	}
 			return 0;
 	}
+	return DefWindowProc(hwnd,message,wParam,lParam);
+}
 
 // post the config window close request message to the parent if not yet sent
 void ConfigDialog_PostCloseMessage(WPARAM wParam)
@@ -2514,7 +2437,7 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 		hwndCurrentConfigProperty = hwndDlg;
 	case WM_UPDATE_PROFILE_LIST:
     case WM_INITDIALOG:
-      //if(!config_win)
+      //if(!IsWindow(config_win))
         //config_win = hwndDlg;
       SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 75));
       SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_SETTICFREQ, (WPARAM)5, 0);
@@ -2692,7 +2615,7 @@ BOOL CALLBACK LevelDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
 		hwndCurrentConfigProperty = hwndDlg;
 		goto UpdateControls;
     case WM_INITDIALOG: {
-      //if(!config_win)
+      //if(!IsWindow(config_win))
         //config_win = hwndDlg;
 
       // create a bitmap to be displayed in the window
@@ -2864,7 +2787,7 @@ BOOL CALLBACK StyleDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
       //SendDlgItemMessage(hwndDlg, IDC_ATTACH_NOTHING, BM_SETCHECK, (WPARAM)BST_UNCHECKED, 0);
       // fall through to check off new values
     case WM_INITDIALOG: {
-      //if(!config_win)
+      //if(!IsWindow(config_win))
         //config_win = hwndDlg;
 
       // set Background style
@@ -3175,7 +3098,7 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 		hwndCurrentConfigProperty = hwndDlg;
 		goto UpdateControls;
     case WM_INITDIALOG: {
-      //if(!config_win)
+      //if(!IsWindow(config_win))
         //config_win = hwndDlg;
 
       LoadUserColours();
@@ -3511,13 +3434,6 @@ void SaveDialog_LoadProfile(HWND hwndDlg)
 			SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, WM_GETTEXT, cnProfileNameBufLen, (LPARAM)szProfile);
 			//int e = LoadProfile(szProfile);
 			LoadProfile(szProfile);
-			//if(e)
-			//HandleFileError(e);
-			/*else {  // TODO: if no error, update the current settings
-			e = SaveProfile(cszIniMainSection, "Current Settings");
-			if(e)
-				HandleFileError(e);
-			}*/
 			SaveDialog_UpdateProfilesProperty();
 		}
 	}
@@ -3564,10 +3480,7 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
 					}
 
 					if(bSave) {
-						//int e = SaveProfile(cszIniMainSection, selected_profile);
 						SaveProfile(szProfile);
-						//if(e)
-							//HandleFileError(e);
 						SaveDialog_UpdateProfilesProperty();
 					}
               }
@@ -3657,8 +3570,6 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
               if(SendDlgItemMessage(hwndDlg, IDC_PROFILELIST, LB_GETTEXT, SendDlgItemMessage(hwndDlg, IDC_PROFILELIST, LB_GETANCHORINDEX, 0, 0), (LPARAM)szProfile) != LB_ERR) {
                 LoadTempProfile(szProfile);
 				SetDlgItemText(hwndDlg, IDC_STATICMESSAGE, szProfileMessage[0] ? szProfileMessage : cszDefaultProfileMessage);
-                //if(e)
-                  //HandleFileError(e);
               }
               return TRUE;
 			}
@@ -3722,10 +3633,10 @@ void GetProfileINIFilename(wchar_t *szBuf, const wchar_t *cszProfile)
 		wcsncpy(szBuf, szMainIniFilename, MAX_PATH);
 	}
 	else {
-	GetProfilePath(szBuf);
+		GetProfilePath(szBuf);
 		PathAppend(szBuf, cszProfile);
 		PathAddExtension(szBuf, cszProfileExtension);
-}
+	}
 }
 
 // create the profile directory (in case it doesn't exist)
@@ -3872,7 +3783,7 @@ int LoadProfileIni(const wchar_t *cszProfile)
 	bFftEqualize = ReadPrivateProfileBool(cszIniMainSection, L"FFTEqualize", bFftEqualize, szFilename);
 	fFftEnvelope = ReadPrivateProfileFloat(cszIniMainSection, L"FFTEnvelope", fFftEnvelope, szFilename);
 	fFftScale = ReadPrivateProfileFloat(cszIniMainSection, L"FFTScale", fFftScale, szFilename);
-		szProfileMessage[0] = 0;
+	szProfileMessage[0] = 0;
 	GetPrivateProfileString(cszIniMainSection, L"Message", szProfileMessage, szProfileMessage, PROFILE_MESSAGE_STRING_LENGTH, szFilename);
 	ReadPrivateProfileColourArray(L"BarColours", FreqBarColour, 256, szFilename);
 	ReadPrivateProfileColourArray(L"PeakColours", PeakColour, 256, szFilename);
@@ -3920,11 +3831,11 @@ int LoadCurrentProfile(void)
 			CalculateAndUpdate();
 		}
 	}
-	
+
 	// if error, try current settings
 	if(error)
 		error = LoadProfile(cszCurrentSettings);
-	
+
 	// if error, try current settings
 	if(error)
 		error = LoadProfile(cszDefaultSettingsName);
@@ -4003,10 +3914,10 @@ void LoadWindowPostion(RECT *pr)
 	pr->top = GetPrivateProfileInt(cszIniMainSection, L"WindowPosTop", pr->top, szMainIniFilename);
 	pr->bottom = GetPrivateProfileInt(cszIniMainSection, L"WindowPosBottom", pr->bottom, szMainIniFilename);
 
-		// make sure the window is not off screen
-		ValidateRectPosition(GetSystemMetrics(SM_CXSCREEN), &pr->left, &pr->right);
-		ValidateRectPosition(GetSystemMetrics(SM_CYSCREEN), &pr->top, &pr->bottom);
-	}
+	// make sure the window is not off screen
+	ValidateRectPosition(GetSystemMetrics(SM_CXSCREEN), &pr->left, &pr->right);
+	ValidateRectPosition(GetSystemMetrics(SM_CYSCREEN), &pr->top, &pr->bottom);
+}
 
 /*
 * file saving functions
@@ -4256,26 +4167,3 @@ void AboutMessage(void)
 			   L"mlynch@gmail.com", L"Classic Spectrum Analyzer", MB_ICONINFORMATION);
 #endif
 }
-
-// pop up a messagebox to try and explain the error
-/*void HandleFileError(int error)
-{
-  HWND parent = 0;
-  if(config_win)
-    parent = config_win;
-
-  switch(error) {
-    case FILE_ERROR_GENERAL:
-      MessageBox(parent, "Error Accessing DAT File.\n\nFile may not exist or is 0 bytes.", "File Error", MB_ICONERROR);
-      break;
-    case FILE_ERROR_HIGHERVERSION:
-      MessageBox(parent, "DAT File is from a higher version!\n\nTry using the lastest version\nof the plugin.", "Wrong Version", MB_ICONWARNING);
-      break;
-    case FILE_ERROR_DATFILESHORT:
-      MessageBox(parent, "Error Accessing DAT File.\n\nThe file is shorter than expected.", "No Profile", MB_ICONERROR);
-      break;
-    case FILE_ERROR_GENERALWRITE:
-      MessageBox(parent, "Error Writing to DAT File.\n\nCheck for:\nfull drive\nwrite protected disk\nviruses\nwhatever", "File Write Error", MB_ICONERROR);
-      break;
-  }
-}*/

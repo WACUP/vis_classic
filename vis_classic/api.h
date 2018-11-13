@@ -9,7 +9,8 @@ extern api_service *serviceManager;
 
 #include <Agave/Language/api_language.h>
 
-/*#include <api/application/api_application.h>
-#define WASABI_API_APP applicationApi*/
+extern api_language* WASABI_API_LNG;
+extern HINSTANCE WASABI_API_LNG_HINST,
+				 WASABI_API_ORIG_HINST;
 
 #endif
