@@ -1,25 +1,17 @@
-// Win32 INI file read functions
-/*bool ReadPrivateProfileBool(const char *cszFile, const char *cszSection, const char *cszKey, bool bDefault);
-float ReadPrivateProfileFloat(const char *cszFile, const char *cszSection, const char *cszKey, float fDefault);
-int ReadPrivateProfileInt(const char *cszFile, const char *cszSection, const char *cszKey, int nDefault, int min, int max);
-COLORREF ReadPrivateProfileColour(const char *cszFile, const char *cszSection, const char *cszKey, COLORREF crDefault);
-void ReadPrivateProfileIntArray(const char *cszFile, const char *cszSection, int *pnValues, unsigned int nSize);
-void ReadPrivateProfileColourArray(const char *cszFile, const char *cszSection, COLORREF *pcrValues, unsigned int nSize);*/
-
 // Win32 INI file write functions
-int WritePrivateProfileBool(const char *cszSection, const char *cszKey, bool bValue, const char *cszFilename);
-int WritePrivateProfileFloat(const char *cszSection, const char *cszKey, float fValue, const char *cszFilename);
-int WritePrivateProfileInt(const char *cszSection, const char *cszKey, int nValue, const char *cszFilename);
-int WritePrivateProfileIntArray(const char *cszSection, int *pnValues, unsigned int nSize, const char *cszFilename);
-int WritePrivateProfileColour(const char *cszSection, const char *cszKey, COLORREF crValue, const char *cszFilename);
-int WritePrivateProfileColourArray(const char *cszSection, COLORREF *pcrValues, unsigned int nSize, const char *cszFilename);
+int WritePrivateProfileBool(const wchar_t *cszSection, const wchar_t *cszKey, bool bValue, const wchar_t *cszFilename);
+int WritePrivateProfileFloat(const wchar_t *cszSection, const wchar_t *cszKey, float fValue, const wchar_t *cszFilename);
+int WritePrivateProfileInt(const wchar_t *cszSection, const wchar_t *cszKey, int nValue, const wchar_t *cszFilename);
+int WritePrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsigned int nSize, const wchar_t *cszFilename);
+int WritePrivateProfileColour(const wchar_t *cszSection, const char *cszKey, COLORREF crValue, const wchar_t *cszFilename);
+int WritePrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValues, unsigned int nSize, const wchar_t *cszFilename);
 
-// My fast INI file read functions
-int ReadFileToBuffer(const char *cszFilename, char *cBuf, DWORD *pdwBufLen);
-bool ReadPrivateProfileString(const char *cszStart, const char *cszEnd, const char *cszSection, const char *cszKey, char *szBuf, unsigned int nBufLen);
-bool ReadPrivateProfileBool(const char *cszStart, const char *cszEnd, const char *cszSection, const char *cszKey, bool bDefault);
-float ReadPrivateProfileFloat(const char *cszStart, const char *cszEnd, const char *cszSection, const char *cszKey, float fDefault);
-int ReadPrivateProfileInt(const char *cszStart, const char *cszEnd, const char *cszSection, const char *cszKey, int nDefault, int min, int max);
-void ReadPrivateProfileIntArray(const char *cszStart, const char *cszEnd, const char *cszSection, int *pnValues, unsigned int nSize);
-COLORREF ReadPrivateProfileColour(const char *cszStart, const char *cszEnd, const char *cszSection, const char *cszKey, COLORREF crDefault);
-void ReadPrivateProfileColourArray(const char *cszStart, const char *cszEnd, const char *cszSection, COLORREF *pcrValues, unsigned int nSize);
+// Win32 INI file read functions
+int ReadFileToBuffer(const wchar_t *cszFilename, wchar_t *cBuf, DWORD *pdwBufLen);
+bool ReadPrivateProfileString(const wchar_t *cszSection, const wchar_t *cszKey, wchar_t *szBuf, unsigned int nBufLen, const wchar_t *cszFilename);
+bool ReadPrivateProfileBool(const wchar_t *cszSection, const wchar_t *cszKey, bool bDefault, const wchar_t *cszFilename);
+float ReadPrivateProfileFloat(const wchar_t *cszSection, const wchar_t *cszKey, float fDefault, const wchar_t *cszFilename);
+int ReadPrivateProfileInt(const wchar_t *cszSection, const wchar_t *cszKey, int nDefault, int min, int max, const wchar_t *cszFilename);
+void ReadPrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsigned int nSize, const wchar_t *cszFilename);
+COLORREF ReadPrivateProfileColour(const wchar_t *cszSection, const wchar_t *cszKey, COLORREF crDefault, const wchar_t *cszFilename);
+void ReadPrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValues, unsigned int nSize, const wchar_t *cszFilename);

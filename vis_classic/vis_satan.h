@@ -1,6 +1,6 @@
-#define CS_MODULE_TITLE "Classic Spectrum Analyzer"
+#define PLUGIN_VERSION " v2.0"
+#define CS_MODULE_TITLE "Classic Spectrum Analyzer" PLUGIN_VERSION
 
-void ComminInit(void);
 void FFTInit(unsigned int nNewFft);
 void ConfigStereo(struct winampVisModule *);
 void OpenConfigStereoWindow(struct winampVisModule *);
@@ -83,21 +83,17 @@ void UpdateAllColours(void);
 void CalculateAndUpdate(void);
 
 // File functions
-void GetModulePath(char *szBuf);
-void GetProfilePath(char *szBuf);
-void GetProfileINIFilename(char *szBuf, const char *cszProfile);
-void GetMainINIFilename(char *szBuf);
+void GetProfileINIFilename(wchar_t *szBuf, const wchar_t *cszProfile);
 int CreateProfileDirectory(void);
-int FileExists(const char *cszFilename);
-void DeleteProfile(const char *cszProfile);
-HANDLE FindProfileFiles(LPWIN32_FIND_DATA pfd);
+int FileExists(const wchar_t *cszFilename);
+void DeleteProfile(const wchar_t *cszProfile);
+HANDLE FindProfileFiles(LPWIN32_FIND_DATAA pfd);
 void EnumProfilesToControl(HWND hDlg, int nIDDlgItem, UINT nMsg, UINT nSelMsg);
-int GetRelativeProfiles(const char *szCurrent, char *szPrevious, char *szNext);
+int GetRelativeProfiles(const wchar_t *szCurrent, wchar_t *szPrevious, wchar_t *szNext);
 unsigned int CountProfileFiles(void);
-void LoadMainIniSettings(void);
-int LoadProfileIni(const char *cszProfile);
-int LoadProfile(const char *cszProfile);
-int LoadTempProfile(const char *cszProfile);
+int LoadProfileIni(const wchar_t *cszProfile);
+int LoadProfile(const wchar_t *cszProfile);
+int LoadTempProfile(const wchar_t *cszProfile);
 int LoadCurrentProfile(void);
 int LoadCurrentProfileOrCreateDefault(void);
 void LoadNextProfile(void);
@@ -106,21 +102,15 @@ int LoadProfileNumber(unsigned int nProfileNumber);
 void LoadUserColours(void);
 void LoadWindowPostion(RECT *pr);
 void SaveMainIniSettings(void);
-int SaveProfileIni(const char *cszProfile);
-void SaveProfileNameEntry(const char *cszProfile);
-void SaveUserColours(void);
-void SaveWindowPostion(RECT *pr);
-int SaveCurrentSettings(void);
+int SaveProfileIni(const wchar_t *cszProfile);
+void SaveProfileNameEntry(const wchar_t *cszProfile);
 int SaveTempCurrentSettings(void);
-int SaveProfile(const char *cszProfile);
+int SaveProfile(const wchar_t *cszProfile);
 void ValidateRectPosition(int nMax, LONG *pnLeft, LONG *pnRight);
 void AboutMessage(void);
-#ifndef _Debug
-void DecryptText(char *szBuf, int nLen);
-#endif
 //void HandleFileError(int error);
 
-LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 BOOL ConfigDialog_Notify(HWND hwndDlg, LPARAM lParam);
 BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM);
 BOOL CALLBACK LevelDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM);
@@ -157,7 +147,7 @@ COLORREF FreqBarColour[256], VolumeColour[256], PeakColour[256], BorderColour[3]
 COLORREF *rgbbuffer, AuxColour[3][256], *SmallAuxColour[6], *colourplane[256];
 BITMAPINFO bmi;
 WNDCLASS wc_smallwin;
-HWND hsmallwin, hatan, config_win;
+HWND hatan, config_win;
 HMENU popupmenu;
 */
 

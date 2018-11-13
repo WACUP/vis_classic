@@ -42,31 +42,50 @@ A few variables are named with the word 'band' when 'bar' would have been better
 TODO: faster file saving would be nice
 */
 
-// Windows 95
-#define _WIN32_WINDOWS 0x0400
-#define WINVER 0x0400
-#define _CRT_SECURE_NO_WARNINGS
+#define WACUP_BUILD
 
 #include <windows.h>
+#include <windowsx.h>
 #include <crtdbg.h>
+#include <commdlg.h>
 #include <commctrl.h>
 #include <math.h>
 #include <stdio.h>
 #include <malloc.h>
+#include <shlwapi.h>
+#include <stdlib.h>
+#include <nu/ServiceBuilder.h>
+#ifdef WACUP_BUILD
+#include <winamp/wa_cup.h>
+#include <loader/hook/get_api_service.h>
+#include <loader/loader/utils.h>
+#include <loader/loader/paths.h>
+#endif
 
-#include "..\winamp\winamp\wa_ipc.h"
-#include "..\winamp\vis\vis.h"
+#include <Winamp/wa_ipc.h>
+#include <Winamp/vis.h>
 #include "..\FFTNullsoft\fft.h"
 #include "..\random\MersenneTwisterPk\PkRandom.h"
 
 #include "vis_satan.h"
-#include "vis_satan.rc"
 #include "BarColour.h"
 #include "File.h"
 #include "LevelCalc.h"
 #include "LevelFunc.h"
 #include "LogBarTable.h"
 #include "PeakColour.h"
+#include "resource.h"
+#include "api.h"
+
+// TODO add to lang.h
+// {0D1DA5F5-FD41-4934-B75A-B8455EE19F82}
+static const GUID VisCSAGUID = 
+{ 0xd1da5f5, 0xfd41, 0x4934, { 0xb7, 0x5a, 0xb8, 0x45, 0x5e, 0xe1, 0x9f, 0x82 } };
+
+// this is used to identify the skinned frame to allow for embedding/control by modern skins if needed
+// {BB74178A-E82D-4b2c-8F36-F4C3123343EA}
+static const GUID embed_guid = 
+{ 0xbb74178a, 0xe82d, 0x4b2c, { 0x8f, 0x36, 0xf4, 0xc3, 0x12, 0x33, 0x43, 0xea } };
 
 // bitmaps store RGB components in the opposite of the COLORREF definition
 #define bmpRGB(r, g ,b) ((DWORD) (((BYTE) (b) | ((WORD) (g) << 8)) | (((DWORD) (BYTE) (r)) << 16)))
@@ -155,22 +174,29 @@ TODO: faster file saving would be nice
 
 #define TEXT_ENCRYPT_KEY 542
 
-const char *cszClassName = "ClassicSpectrum";
-const char *cszModuleTitle = CS_MODULE_TITLE;
-#ifdef _DEBUG
-const char *cszAboutCaption = "Classic Spectrum";
-const char *cszAboutText = "Classic Spectrum Analyzer\n\nCopyright © 2007 Mike Lynch\n\nmlynch@gmail.com";
+const wchar_t *cszIniMainSection = L"Classic Analyzer";
+const wchar_t *cszProfileDirectory = L"vis_classic";
+const wchar_t *cszIniFilename = L"Plugins\\vis_classic.ini";
+const wchar_t *cszCurrentSettings = L"Current Settings";
+#ifdef WACUP_BUILD
+const wchar_t *cszDefaultSettingsName = L"Classic";
+#else
+const wchar_t *cszDefaultSettingsName = L"Default Red & Yellow";
 #endif
-char szAboutCaption[] = {0x34,0x7c,0x3e,0x4f,0x6f,0x88,0x94,0xcf,0x78,0xe1,0xa6,0x54,0xc4,0xaa,0xdb,0xa7,0x00};
-char szAboutText[] = {0x91,0x2e,0xbd,0x95,0xdc,0x05,0x94,0x39,0x93,0xfa,0xe7,0x1f,0x63,0x93,0x35,0x9f,0x61,0x11,0xe0,0x2f,0x5f,0xc6,0xc8,0x50,0xc3,0x16,0xb9,0xee,0xb4,0x9e,0x94,0xfb,0x72,0xb7,0x58,0xc4,0xc0,0x3d,0xcb,0xb2,0x6b,0x0d,0xad,0x4d,0x80,0xf2,0x57,0xa4,0x28,0xdb,0x3d,0x3a,0x37,0x0a,0xbf,0xf0,0xec,0x6a,0xf6,0x24,0x65,0xf7,0x91,0x9a,0xb4,0x0b,0xdf,0x28,0x28,0xa1,0x2f,0xe0,0x00};
-const char *cszIniMainSection = "Classic Analyzer";
-const char *cszProfileDirectory = "vis_classic";
-const char *cszIniFilename = "vis_classic.ini";
-const char *cszCurrentSettings = "Current Settings";
-const char *cszDefaultSettingsName = "Default Red & Yellow";
-const char *cszProfileExtension = ".ini";
-const char *cszDefaultProfileMessage = "Click on a profile to load it (any changes not saved will be lost).\nClick OK to save the Current Settings.\nClick Cancel to re-load the Current Settings (any changes will be discarded).";
+const wchar_t *cszProfileExtension = L".ini";
+const wchar_t *cszDefaultProfileMessage = L"Click on a profile to load it (any changes not saved will be "
+										  L"lost).\nClick OK to save the Current Settings.\nClick Cancel "\
+										  L"to re-load the Current Settings (any changes will be discarded).";
 const int cnProfileNameBufLen = MAX_PROFILE_NAME_LENGTH + 1;
+
+LRESULT CALLBACK EmdedWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
+							  UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+
+api_service* WASABI_API_SVC = NULL;
+//api_application *WASABI_API_APP = NULL;
+api_language* WASABI_API_LNG = NULL;
+HINSTANCE WASABI_API_LNG_HINST = 0,
+		  WASABI_API_ORIG_HINST = 0;
 
 winampVisModule AtAnSt_Vis_mod = {
 	CS_MODULE_TITLE,
@@ -193,9 +219,6 @@ winampVisModule AtAnSt_Vis_mod = {
 // note that the magic value 576 is used everywhere, it's really a bar count limit
 #define MAX_BARS 576
 
-// fixed length for temp strings
-#define TEMP_STRING_LENGTH 256
-
 // analyzer
 int falloffrate = 12;
 int peakchangerate = 80;
@@ -204,18 +227,18 @@ int levelbase = LEVEL_AVERAGE;
 bool reverseleft = true, reverseright = false, mono = true;
 
 // flash function
-int volume_func[256];
+int volume_func[256] = {0};
 
 // style
-int backgrounddraw, barcolourstyle, peakcolourstyle, effect, peakleveleffect;
+int backgrounddraw = 0, barcolourstyle = 0, peakcolourstyle = 0, effect = 0, peakleveleffect = 0;
 
 int win_height = 20, win_width = 100, draw_x_start = 0, draw_y_start = 0;
 int image_width = 0;
-int draw_height, draw_width, band_width, bands, total_width;
+int draw_height = 0, draw_width = 0, band_width = 0, bands = 0, total_width = 0;
 //bool force_redraw = true;
 bool bPostCloseConfig = true;
-double height_scale, draw_height_scaler, peak_fade_scaler;
-float level_height_scaler;
+double height_scale = 1.0f, draw_height_scaler = 1.0f, peak_fade_scaler = 1.0f;
+float level_height_scaler = 1.0f;
 int peakchange[576 * 2] = {0};
 short int peakreferencelevel[576 * 2] = {0};
 int levelbuffer[3][576 * 2] = {0};
@@ -227,13 +250,12 @@ unsigned char *colour_lookup[256] = {0};
 unsigned char *peak_lookup[256] = {0};
 short int peak_level_lookup[256][256] = {0};
 short int peak_level_length[256] = {0};
-//HINSTANCE ModulehDllInstance;
 COLORREF *rgbbuffer = NULL;
-COLORREF AuxColour[3][256];
-COLORREF *SmallAuxColour[6];
-COLORREF FreqBarColour[256], VolumeColour[256], PeakColour[256];
-COLORREF UserColours[16];  // user defined colours for Pick Colour
-BITMAPINFO bmi;
+COLORREF AuxColour[3][256] = {0};
+COLORREF *SmallAuxColour[6] = {0};
+COLORREF FreqBarColour[256] = {0}, VolumeColour[256] = {0}, PeakColour[256] = {0};
+COLORREF UserColours[16] = {0};  // user defined colours for Pick Colour
+BITMAPINFO bmi = {0};
 void (*CalculateVariables)(void) = CalculateVariablesStereo;
 int (*LevelCalcStereo)(int low, int high, unsigned char *spectrumData) = AverageLevelCalcStereo;
 int (*LevelCalcMono)(int low, int high, unsigned char *spectrumDataLeft, unsigned char *spectrumDataRight) = AverageLevelCalcMono;
@@ -242,13 +264,14 @@ void (*RenderBars)(void) = RenderSingleBars;
 void (*PeakLevelEffect)(void) = PeakLevelNormal;
 unsigned char (*BarColourScheme)(int level, int y) = BarColourClassic;
 unsigned char (*PeakColourScheme)(int level, int y) = PeakColourFade;
-HWND hsmallwin = NULL, hatan = NULL, config_win = NULL, hwndCurrentConfigProperty = NULL;
+HWND hatan = NULL, config_win = NULL, hwndCurrentConfigProperty = NULL;
 HMENU hmenu = NULL;
 HMENU popupmenu = NULL;
 embedWindowState myWindowState = {0};
-char szCurrentProfile[TEMP_STRING_LENGTH] = {0};
-char szTempProfile[TEMP_STRING_LENGTH] = {0};
-char szProfileMessage[PROFILE_MESSAGE_STRING_LENGTH] = {0};
+wchar_t szMainIniFilename[MAX_PATH] = {0};
+wchar_t szCurrentProfile[MAX_PATH] = {0};
+wchar_t szTempProfile[MAX_PATH] = {0};
+wchar_t szProfileMessage[PROFILE_MESSAGE_STRING_LENGTH] = {0};
 
 Pk::Random32 m_rand;
 
@@ -256,30 +279,33 @@ Pk::Random32 m_rand;
 FFT m_fft;
 unsigned int nFftFrequencies = 0;
 unsigned char *caSpectrumData[2] = {0};
-unsigned int naBarTable[MAX_BARS];
+unsigned int naBarTable[MAX_BARS] = {0};
 bool bFftEqualize = true;
 float fFftEnvelope = 0.2f;
 float fFftScale = 2.0f;
 
-void ComminInit(void)
+void SetupServices(winampVisModule *this_mod)
 {
-	for(int i = 0; i < 6; i += 2) {
-		SmallAuxColour[i] = AuxColour[i / 2];
-		SmallAuxColour[i + 1] = &AuxColour[i / 2][128];
+#ifdef WACUP_BUILD
+	WASABI_API_SVC = GetServiceAPIPtr();
+#else
+	// load all of the required wasabi services from the winamp client
+	WASABI_API_SVC = reinterpret_cast<api_service*>(SendMessage(plugin.hwndParent, WM_WA_IPC, 0, IPC_GET_API_SERVICE));
+	if (WASABI_API_SVC == reinterpret_cast<api_service*>(1)) WASABI_API_SVC = NULL;
+#endif
+	if (WASABI_API_SVC != NULL)
+	{
+		if (WASABI_API_LNG == NULL)
+		{
+			ServiceBuild(WASABI_API_SVC, WASABI_API_LNG, languageApiGUID);
+			WASABI_API_START_LANG(this_mod->hDllInstance, VisCSAGUID);
 	}
 
-	m_rand.seed(TEXT_ENCRYPT_KEY);
-	DecryptText(szAboutCaption, sizeof(szAboutCaption) - 1);
-	DecryptText(szAboutText, sizeof(szAboutText) - 1);
-
-	//OSVERSIONINFO osvi = {0};
-	//osvi.dwOSVersionInfoSize = sizeof (OSVERSIONINFO);
-	//GetVersionEx (&osvi);
-
-	//if(osvi.dwPlatformId == VER_PLATFORM_WIN32_NT)
-		//force_redraw = true;  // NT needs forced redraw for bitmaps
-	//else
-		//force_redraw = false;
+		/*if (WASABI_API_APP == NULL)
+		{
+			ServiceBuild(WASABI_API_SVC, WASABI_API_APP, applicationApiServiceGuid);
+		}*/
+	}
 }
 
 void FFTInit(unsigned int nNewFft)
@@ -296,12 +322,13 @@ void FFTInit(unsigned int nNewFft)
 
 void ConfigStereo(winampVisModule *this_mod)
 {
+	SetupServices(this_mod);
+
 	// if plugin is open, post a message to open properties in the window's thread
-	if(hatan)
+	if(IsWindow(hatan))
 		PostMessage(hatan, WM_OPEN_PROPERTYWIN, 0, 0);
 	// else make sure properties is not already open
-	else if(!hwndCurrentConfigProperty) {
-		//ModulehDllInstance = this_mod->hDllInstance;
+	else if(!IsWindow(hwndCurrentConfigProperty)) {
 		// use the Null variable calcualtion
 		CalculateVariables = CalculateVariablesNull;
 		// if settings can't be loaded, save the default
@@ -324,60 +351,61 @@ void OpenConfigStereoWindow(winampVisModule *this_mod)
 	// show the property page
 	//if(!IsWindow(config_win)) {
 	if(!config_win) {
-		INITCOMMONCONTROLSEX icce = {sizeof(INITCOMMONCONTROLSEX), ICC_BAR_CLASSES};
-		InitCommonControlsEx(&icce);
+		// winamp does this for us already
+		/*INITCOMMONCONTROLSEX icce = {sizeof(INITCOMMONCONTROLSEX), ICC_BAR_CLASSES};
+		InitCommonControlsEx(&icce);*/
 
 		PROPSHEETHEADER psh = {0};
 		PROPSHEETPAGE page[5] = {0};
 
 		page[0].dwSize      = sizeof(PROPSHEETPAGE);
 		page[0].dwFlags     = PSP_DEFAULT;
-		page[0].hInstance   = this_mod->hDllInstance;
+		page[0].hInstance   = WASABI_API_LNG_HINST;
 		page[0].pszTemplate = MAKEINTRESOURCE(IDD_ANALYZER);
 		page[0].pfnDlgProc  = (DLGPROC) ConfigDialogProc;
 
 		page[1].dwSize      = sizeof(PROPSHEETPAGE);
 		page[1].dwFlags     = PSP_DEFAULT;
-		page[1].hInstance   = this_mod->hDllInstance;
+		page[1].hInstance   = WASABI_API_LNG_HINST;
 		page[1].pszTemplate = MAKEINTRESOURCE(IDD_FUNCTION);
 		page[1].pfnDlgProc  = (DLGPROC) LevelDialogProc;
 
 		page[2].dwSize      = sizeof(PROPSHEETPAGE);
 		page[2].dwFlags     = PSP_DEFAULT;
-		page[2].hInstance   = this_mod->hDllInstance;
+		page[2].hInstance   = WASABI_API_LNG_HINST;
 		page[2].pszTemplate = MAKEINTRESOURCE(IDD_STYLE);
 		page[2].pfnDlgProc  = (DLGPROC) StyleDialogProc;
 
 		page[3].dwSize      = sizeof(PROPSHEETPAGE);
 		page[3].dwFlags     = PSP_DEFAULT;
-		page[3].hInstance   = this_mod->hDllInstance;
+		page[3].hInstance   = WASABI_API_LNG_HINST;
 		page[3].pszTemplate = MAKEINTRESOURCE(IDD_COLOUR);
 		page[3].pfnDlgProc  = (DLGPROC) ColourDialogProc;
 
 		/*page[4].dwSize      = sizeof(PROPSHEETPAGE);
 		page[4].dwFlags     = PSP_DEFAULT;
-		page[4].hInstance   = this_mod->hDllInstance;
+		page[4].hInstance   = WASABI_API_LNG_HINST;
 		page[4].pszTemplate = MAKEINTRESOURCE(IDD_STEREO);
 		page[4].pfnDlgProc  = (DLGPROC) StereoDialogProc;*/
 
 		page[4].dwSize      = sizeof(PROPSHEETPAGE);
 		page[4].dwFlags     = PSP_DEFAULT;
-		page[4].hInstance   = this_mod->hDllInstance;
+		page[4].hInstance   = WASABI_API_LNG_HINST;
 		page[4].pszTemplate = MAKEINTRESOURCE(IDD_PROFILESELECT);
 		page[4].pfnDlgProc  = (DLGPROC) ProfileSelectDialogProc;
 
 		psh.dwSize        = sizeof (PROPSHEETHEADER);
-		psh.dwFlags       = PSH_NOAPPLYNOW | PSH_PROPTITLE | PSH_PROPSHEETPAGE;
-		psh.hInstance     = this_mod->hDllInstance;
+		psh.dwFlags       = PSH_NOAPPLYNOW | PSH_PROPTITLE | PSH_PROPSHEETPAGE | PSH_NOCONTEXTHELP;
+		psh.hInstance     = WASABI_API_LNG_HINST;
 		psh.hwndParent    = this_mod->hwndParent;
-		psh.pszIcon       = NULL;
-		psh.pszCaption    = cszModuleTitle;
+
+		// TODO localise
+		psh.pszCaption    = L"Classic Spectrum Analyzer";
 		psh.nStartPage    = 0;
 		psh.nPages        = 5;
 		psh.ppsp          = page;
-		psh.pfnCallback   = 0;
 
-		if(hatan) {
+		if(IsWindow(hatan)) {
 			psh.dwFlags = psh.dwFlags | PSH_MODELESS;
 			psh.hwndParent = hatan;
 			config_win = (HWND)PropertySheet(&psh);
@@ -393,24 +421,29 @@ void OpenConfigStereoWindow(winampVisModule *this_mod)
 // init for the stereo attached analyser
 int AtAnStInit(winampVisModule *this_mod)
 {
-	if(hwndCurrentConfigProperty) {
-		HWND hParent = GetParent(hwndCurrentConfigProperty);
+	SetupServices(this_mod);
+
+	if(IsWindow(hwndCurrentConfigProperty)) {
+		//HWND hParent = GetParent(hwndCurrentConfigProperty);
 		//MessageBox(hParent, "Please close the properties window before starting the plug-in.", "Configure is open!", MB_OK);
 		PostMessage(hwndCurrentConfigProperty, WM_CONFIG_OPEN_ERROR, 0, 0);
 		return -1;
 	}
 
-	ComminInit();
-	HWND (*embed)(embedWindowState *v);
-	*(void**)&embed = (void *)SendMessage(this_mod->hwndParent, WM_WA_IPC, (LPARAM)0, IPC_GET_EMBEDIF);
-	if(!embed)
-	{
-		MessageBox(this_mod->hwndParent, "This plugin requires Winamp 5.0+", "Uh Oh", MB_OK);
-		return 1;
+	for(int i = 0; i < 6; i += 2) {
+		SmallAuxColour[i] = AuxColour[i / 2];
+		SmallAuxColour[i + 1] = &AuxColour[i / 2][128];
 	}
 
-	// need to remember the hDllInstance for determining file locations
-	//ModulehDllInstance = this_mod->hDllInstance;
+	m_rand.seed(TEXT_ENCRYPT_KEY);
+
+	// TODO use wacup version
+	// makes an absolute path to the ini file
+#ifdef WACUP_BUILD
+	PathCombine(szMainIniFilename, get_paths()->settings_dir, cszIniFilename);
+#else
+	PathCombine(szMainIniFilename, (wchar_t*)SendMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_GETINIDIRECTORYW), cszIniFilename);
+#endif
 
 	// default to under Winamp
 	RECT rWinamp;
@@ -419,41 +452,53 @@ int AtAnStInit(winampVisModule *this_mod)
 	myWindowState.r.top = rWinamp.bottom;
 	myWindowState.r.right = rWinamp.right;
 	myWindowState.r.bottom = rWinamp.bottom + 100;
+	myWindowState.flags |= EMBED_FLAGS_SCALEABLE_WND;	// double-size support!
 	
 	// load saved window position
 	LoadWindowPostion(&myWindowState.r);
 	
-	HWND parent = embed(&myWindowState);
-	SetWindowText(myWindowState.me, this_mod->description); // set window title
+	// this sets a GUID which can be used in a modern skin / other parts of Winamp to
+	// indentify the embedded window frame such as allowing it to activated in a skin
+	SET_EMBED_GUID((&myWindowState), embed_guid);
 
-	//register window class
-	WNDCLASS wc = {0};
-	//memset(&wc, 0, sizeof(wc));
-	wc.lpfnWndProc = AtAnWndProc;
-	wc.hInstance = this_mod->hDllInstance;
-	wc.lpszClassName = cszClassName;
+	myWindowState.flags |= EMBED_FLAGS_NOTRANSPARENCY | EMBED_FLAGS_NOWINDOWMENU;
+	HWND (*e)(embedWindowState *v);
+	*(void**)&e = (void *)SendMessage(this_mod->hwndParent,WM_WA_IPC,(LPARAM)0,IPC_GET_EMBEDIF);
+	if (e)
+	{
+		myWindowState.flags |= EMBED_FLAGS_SCALEABLE_WND;
+		HWND parent = e(&myWindowState);
+		if (IsWindow(parent))
+		{
+			// TODO localise
+			SetWindowText(myWindowState.me, L"Classic Spectrum Analyzer"); // set window title
 
-	if(!RegisterClass(&wc)) {
-		MessageBox(this_mod->hwndParent, "Error registering class, this is serious!", "Uh Oh", MB_OK);
-		return 1;
-	} else {
-		hatan = CreateWindow(cszClassName, this_mod->description, WS_VISIBLE | WS_CHILDWINDOW,
-								1, 1, 100, 20,
-								parent, NULL, this_mod->hDllInstance, 0);
-
-		if(!hatan) {
-			MessageBox(this_mod->hwndParent, "Could not create window, sorry but this is serious!", "Uh Oh", MB_OK);
-			UnregisterClass(cszClassName, this_mod->hDllInstance);
+			hatan = CreateDialogParamW(this_mod->hDllInstance, MAKEINTRESOURCEW(IDD_VIEW),
+									   parent, AtAnWndProc, (LPARAM)this_mod);
+			if(!IsWindow(hatan)) {
+				//MessageBoxA(this_mod->hwndParent, "Could not create window, sorry but this is serious!", "Uh Oh", MB_OK);
 			return 1;
 		}
-	}
+
+			// just to be certain if the skinned preferences support is installed
+			// we want to ensure that we're not going to have it touch our window
+			// as it can otherwise cause some occassional drawing issues/clashes.
+			SetPropW(hatan, L"SKPrefs_Ignore", (HANDLE)1);
 
 	SetWindowLong(hatan, GWL_USERDATA, (LONG)this_mod); // set our user data to a "this" pointer
-	SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);
+			SendMessage(AtAnSt_Vis_mod.hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);
+
+			SetWindowSubclass(parent, EmdedWndProc, (UINT_PTR)EmdedWndProc, 0);
+
+			// this needs to be called so the created window will be processed in the Ctrl+Tab loop
+			//WASABI_API_APP->app_registerGlobalWindow(parent);
 
 	// assign popup menu
-	hmenu = LoadMenu(this_mod->hDllInstance, MAKEINTRESOURCE(IDM_POPUP));
+			hmenu = WASABI_API_LOADMENUW(IDM_POPUP);
+			if (IsMenu(hmenu))
+			{
 	popupmenu = GetSubMenu(hmenu, 0);
+			}
 
 	// create the drawing buffer and initialize to 0
 	image_width = GetSystemMetrics(SM_CXSCREEN);
@@ -478,11 +523,8 @@ int AtAnStInit(winampVisModule *this_mod)
 	bmi.bmiHeader.biPlanes = 1;
 	bmi.bmiHeader.biBitCount = 32;
 	bmi.bmiHeader.biCompression = BI_RGB;
-	bmi.bmiHeader.biSizeImage = 0;
 	bmi.bmiHeader.biXPelsPerMeter = 100;
 	bmi.bmiHeader.biYPelsPerMeter = 100;
-	bmi.bmiHeader.biClrUsed = 0;
-	bmi.bmiHeader.biClrImportant = 0;
 
 	// use the Stereo variable calcualtion
 	CalculateVariables = CalculateVariablesStereo;
@@ -495,11 +537,17 @@ int AtAnStInit(winampVisModule *this_mod)
 	m_rand.seed(GetTickCount());
 	return 0;
 }
+	}
+	return -1;
+}
 
 void AtAnQuit(winampVisModule *this_mod)
 {
-	// load saved window position
-	SaveWindowPostion(&myWindowState.r);
+	// save window position
+	WritePrivateProfileInt(cszIniMainSection, L"WindowPosLeft", myWindowState.r.left, szMainIniFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"WindowPosRight", myWindowState.r.right, szMainIniFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"WindowPosTop", myWindowState.r.top, szMainIniFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"WindowPosBottom", myWindowState.r.bottom, szMainIniFilename);
 
 	// close the config window with property exit code (changes will be lost)
 	if(config_win)
@@ -509,15 +557,22 @@ void AtAnQuit(winampVisModule *this_mod)
 	//if(IsWindow(this_mod->hwndParent))
 	//	SendMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_SETVISWND);
 
+	if(IsMenu(hmenu))
 	DestroyMenu(hmenu);
 
-	DestroyWindow(hatan);
 	if(IsWindow(myWindowState.me))
 		DestroyWindow(myWindowState.me);
-	UnregisterClass(cszClassName, this_mod->hDllInstance);
+
+	if(IsWindow(hatan))
+		DestroyWindow(hatan);
 
 	m_fft.CleanUp();
+
+	if(rgbbuffer) {
 	delete[] rgbbuffer;
+		rgbbuffer = NULL;
+	}
+
 	for(int i = 1; i < 256; i++) {
 		delete[] colour_lookup[i];
 		delete[] peak_lookup[i];
@@ -526,6 +581,9 @@ void AtAnQuit(winampVisModule *this_mod)
 		delete[] caSpectrumData[0];
 	if(caSpectrumData[1])
 		delete[] caSpectrumData[1];
+
+	ServiceRelease(WASABI_API_SVC, WASABI_API_LNG, languageApiGUID);
+	//ServiceRelease(WASABI_API_SVC, WASABI_API_APP, applicationApiServiceGuid);
 }
 
 void FFTAnalyze(winampVisModule *this_mod)
@@ -555,7 +613,6 @@ void FFTAnalyze(winampVisModule *this_mod)
 int AtAnStDirectRender(winampVisModule *this_mod)
 {
 	FFTAnalyze(this_mod);
-	//DWORD dwTicks = GetTickCount();
 	int volume = 0;
 
 	if(!mono) {
@@ -637,10 +694,10 @@ int AtAnStDirectRender(winampVisModule *this_mod)
 
   // now blt the generated mess to the window
   HDC hdc = GetDC(hatan);
+  if (hdc != NULL) {
   SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height, 0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
   ReleaseDC(hatan,hdc);
-
-  //dwTicks = GetTickCount() - dwTicks;
+  }
   return 0;
 }
 
@@ -975,7 +1032,7 @@ void UpdateAllColours(void)
 	EraseWindow();
 	ClearBackground();
 	BackgroundDraw(0);
-	if(hatan)
+	if(IsWindow(hatan))
 		InvalidateRect(hatan, NULL, FALSE);
 }
 
@@ -1097,7 +1154,7 @@ void RandomColourLookup()
 void DefaultSettings()
 {
 	// profile name
-	strcpy(szCurrentProfile, cszDefaultSettingsName);
+	wcsncpy(szCurrentProfile, cszDefaultSettingsName, ARRAYSIZE(szCurrentProfile));
 
 	// set colours
 	for(int i = 0; i < 256; i++) {
@@ -1162,7 +1219,7 @@ void EraseWindow(HDC hdc)
 
 void EraseWindow(void)
 {
-    if(hatan) {
+    if(IsWindow(hatan)) {
 	HDC hdc = GetDC(hatan);
 	EraseWindow(hdc);
 	ReleaseDC(hatan, hdc);
@@ -1198,15 +1255,11 @@ void BackgroundBlackFast(unsigned char)
 // clear the background drawing a grid based on background flash colours
 void BackgroundFade(unsigned char)
 {
-  int x, y, i;
-  int colouridx;
-  //COLORREF colour;
-
-  for(y = 0; y < draw_height; y += y_spacing) {
+  for(int y = 0; y < draw_height; y += y_spacing) {
     // +0.0035 is used to correct for rounding errors
-    colouridx = (int)(y * (height_scale + 0.0035));
-    for(x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(i = 0; i < band_width; i++)
+    int colouridx = (int)(y * (height_scale + 0.0035));
+    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+      for(int i = 0; i < band_width; i++)
         rgbbuffer[y * image_width + x + i] = VolumeColour[colouridx];
     }
     // no need to draw the inbetween colour (black) now
@@ -1221,16 +1274,15 @@ void BackgroundFade(unsigned char)
 // for the mirror effect
 void BackgroundFadeMirror(unsigned char)
 {
-  int x, y, i, middle = draw_height / 2 / y_spacing * y_spacing;
-  int colouridx;
+  int middle = draw_height / 2 / y_spacing * y_spacing;
   //COLORREF colour;
 
-  for(y = 0; y <= draw_height / 2; y += y_spacing) {
+  for(int y = 0; y <= draw_height / 2; y += y_spacing) {
     // +0.0035 is used to correct for rounding errors
     //colouridx = (int)(y * 1.90f * (height_scale - 0.0035f));
-    colouridx = (int)(y * 2.0 * level_height_scaler);
-    for(x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(i = 0; i < band_width; i++) {
+    int colouridx = (int)(y * 2.0 * level_height_scaler);
+    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+      for(int i = 0; i < band_width; i++) {
         rgbbuffer[(middle + y) * image_width + x + i] = VolumeColour[colouridx];
         rgbbuffer[(middle - y) * image_width + x + i] = VolumeColour[colouridx];
       }
@@ -1242,28 +1294,27 @@ void BackgroundFadeMirror(unsigned char)
 // this is for the Reflection style
 void BackgroundFadeReflection(unsigned char)
 {
-  int x, y, i, middle = draw_height / 3 / y_spacing * y_spacing;
-  int colouridx;
+  int middle = draw_height / 3 / y_spacing * y_spacing;
   COLORREF colour;
 
   // draw top part of background
-  for(y = middle; y < draw_height; y += y_spacing) {
+  for(int y = middle; y < draw_height; y += y_spacing) {
     // +0.0035 is used to correct for rounding errors
-    colouridx = (int)((y - middle) * 1.49 * (height_scale + 0.0035));
+    int colouridx = (int)((y - middle) * 1.49 * (height_scale + 0.0035));
     colour = VolumeColour[colouridx];
-    for(x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(i = 0; i < band_width; i++)
+    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+      for(int i = 0; i < band_width; i++)
         rgbbuffer[y * image_width + x + i] = colour;
         //rgbbuffer[(middle - y) * image_width + x + i] = colour;
     }
   }
   // now draw bottom (reflection) part
-  for(y = middle; y >= 0; y -= y_spacing) {
+  for(int y = middle; y >= 0; y -= y_spacing) {
     // +0.0035 is used to correct for rounding errors
-    colouridx = (int)((middle - y) * 2.975 * (height_scale + 0.0035));
+    int colouridx = (int)((middle - y) * 2.975 * (height_scale + 0.0035));
     colour = bmpRGB(GetBValue(VolumeColour[colouridx]) / 1.45, GetGValue(VolumeColour[colouridx]) / 1.45, GetRValue(VolumeColour[colouridx]) / 1.45);
-    for(x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(i = 0; i < band_width; i++)
+    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+      for(int i = 0; i < band_width; i++)
         rgbbuffer[y * image_width + x + i] = colour;
         //rgbbuffer[(middle - y) * image_width + x + i] = colour;
     }
@@ -1290,16 +1341,12 @@ void BackgroundFlash(unsigned char volume)
 // clear the background drawing a grid based on dim Freq Bar colours
 void BackgroundGrid(unsigned char)
 {
-  int x, y, i;
-  int colouridx;
-  COLORREF colour;
-
-  for(y = 0; y < draw_height; y += y_spacing) {
+  for(int y = 0; y < draw_height; y += y_spacing) {
     // +0.0035 is used to correct for rounding errors
-    colouridx = (int)(y * (height_scale + 0.0035));
-    colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
-    for(x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(i = 0; i < band_width; i++)
+    int colouridx = (int)(y * (height_scale + 0.0035));
+    COLORREF colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
+    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+      for(int i = 0; i < band_width; i++)
         rgbbuffer[y * image_width + x + i] = colour;
     }
     // no need to draw the inbetween colour (black) now
@@ -1314,17 +1361,15 @@ void BackgroundGrid(unsigned char)
 // this is for the Mirror style
 void BackgroundGridMirror(unsigned char)
 {
-  int x, y, i, middle = draw_height / 2 / y_spacing * y_spacing;
-  int colouridx;
-  COLORREF colour;
+  int middle = draw_height / 2 / y_spacing * y_spacing;
 
-  for(y = 0; y <= draw_height / 2; y += y_spacing) {
+  for(int y = 0; y <= draw_height / 2; y += y_spacing) {
     // +0.0035 is used to correct for rounding errors
     //colouridx = (int)(y * 1.97f * (height_scale + 0.0035f));
-    colouridx = (int)(y * 2.0 * level_height_scaler);
-    colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
-    for(x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(i = 0; i < band_width; i++) {
+    int colouridx = (int)(y * 2.0 * level_height_scaler);
+    COLORREF colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
+    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+      for(int i = 0; i < band_width; i++) {
         rgbbuffer[(middle + y) * image_width + x + i] = colour;
         rgbbuffer[(middle - y) * image_width + x + i] = colour;
       }
@@ -1336,28 +1381,27 @@ void BackgroundGridMirror(unsigned char)
 // this is for the Reflection style
 void BackgroundGridReflection(unsigned char)
 {
-  int x, y, i, middle = draw_height / 3 / y_spacing * y_spacing;
-  int colouridx;
+  int middle = draw_height / 3 / y_spacing * y_spacing;
   COLORREF colour;
 
   // draw top part of background
-  for(y = middle; y < draw_height; y += y_spacing) {
+  for(int y = middle; y < draw_height; y += y_spacing) {
     // +0.0035 is used to correct for rounding errors
-    colouridx = (int)((y - middle) * 1.49 * (height_scale + 0.0035));
+    int colouridx = (int)((y - middle) * 1.49 * (height_scale + 0.0035));
     colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
-    for(x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(i = 0; i < band_width; i++)
+    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+      for(int i = 0; i < band_width; i++)
         rgbbuffer[y * image_width + x + i] = colour;
         //rgbbuffer[(middle - y) * image_width + x + i] = colour;
     }
   }
   // now draw bottom (reflection) part
-  for(y = middle; y >= 0; y -= y_spacing) {
+  for(int y = middle; y >= 0; y -= y_spacing) {
     // +0.0035 is used to correct for rounding errors
-    colouridx = (int)((middle - y) * 2.975 * (height_scale + 0.0035));
+    int colouridx = (int)((middle - y) * 2.975 * (height_scale + 0.0035));
     colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 4.5, GetGValue(FreqBarColour[colouridx]) / 4.5, GetRValue(FreqBarColour[colouridx]) / 4.5);
-    for(x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(i = 0; i < band_width; i++)
+    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+      for(int i = 0; i < band_width; i++)
         rgbbuffer[y * image_width + x + i] = colour;
         //rgbbuffer[(middle - y) * image_width + x + i] = colour;
     }
@@ -1380,14 +1424,13 @@ void BackgroundSolid(unsigned char)
 
 void RenderSingleBars()
 {
-  int x, y;
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
+    int x = i * total_width;
     //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
     //for(int y = 0; y * height_scale < (int)(level[i]); y++) {
     //for(y = 0; y < (int)(level[i] / height_scale); y += y_spacing)
     //for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
-	for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
 	}
@@ -1400,22 +1443,21 @@ void RenderSingleBars()
 void RenderWideBars()
 {
   //static int trippycolourbase = 0, trippycolour;
-  int x, y, tx, temp, x_stop;
   COLORREF copycolour;
   //trippycolour = trippycolourbase;
 
   for(int i = 0; i < bands; i++) {
     //for(x = i * (band_width + x_spacing); x < i * (band_width + x_spacing) + band_width; x++) {
-    x = i * total_width;
-    x_stop = i * total_width + band_width;
+    int x = i * total_width;
+    int x_stop = i * total_width + band_width;
     //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
     //for(int y = 0; y * height_scale < (int)(level[i]); y++) {
     //for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
-    for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       copycolour = FreqBarColour[colour_lookup[level[i]][y]];
-      temp = y * image_width;
-      for(tx = x; tx < x_stop; tx++)
+      int temp = y * image_width;
+      for(int tx = x; tx < x_stop; tx++)
         rgbbuffer[temp + tx] = copycolour;
     }
     //trippycolour = (trippycolour + (576 / bands)) % 576;
@@ -1434,7 +1476,7 @@ void RenderWideBars()
 
     if(peaklevel[i]) {
       copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
+      int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
       do{
         //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = PeakColour[peak_lookup[peaklevel[i]][peakchange[i]]];
         rgbbuffer[temp + x] = copycolour;
@@ -1449,14 +1491,14 @@ void RenderWideBars()
 
 void RenderSingleBarsMirror()
 {
-  int x, y, middle = (draw_height / 2 / y_spacing) * y_spacing;
+  int middle = (draw_height / 2 / y_spacing) * y_spacing;
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
+    int x = i * total_width;
     //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
     //for(int y = 0; y * height_scale < (int)(level[i]); y++) {
     //for(y = 0; y < (int)(level[i] / height_scale); y += y_spacing)
     //for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
-    for(y = 0; y < (int)(level[i] / level_height_scaler) / 2; y += y_spacing) {
+    for(int y = 0; y < (int)(level[i] / level_height_scaler) / 2; y += y_spacing) {
 	  _ASSERT(y * 2 < 255);
       rgbbuffer[(middle + y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 2]];
       rgbbuffer[(middle - y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 2]];
@@ -1473,19 +1515,19 @@ void RenderSingleBarsMirror()
 void RenderWideBarsMirror()
 {
   //static int trippycolourbase = 0, trippycolour;
-  int x, y, tx, temp, temp2, x_stop, middle = (draw_height / 2 / y_spacing) * y_spacing;
+  int temp, temp2, middle = (draw_height / 2 / y_spacing) * y_spacing;
   COLORREF copycolour;
   //trippycolour = trippycolourbase;
 
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
-    x_stop = i * total_width + band_width;
-    for(y = 0; y < (int)(level[i] / level_height_scaler) / 2; y += y_spacing) {
+    int x = i * total_width;
+    int x_stop = i * total_width + band_width;
+    for(int y = 0; y < (int)(level[i] / level_height_scaler) / 2; y += y_spacing) {
 	  _ASSERT(y * 2 < 255);
       copycolour = FreqBarColour[colour_lookup[level[i]][y * 2]];
       temp = (middle + y) * image_width;
       temp2 = (middle - y) * image_width;
-      for(tx = x; tx < x_stop; tx++) {
+      for(int tx = x; tx < x_stop; tx++) {
         rgbbuffer[temp + tx] = copycolour;
         rgbbuffer[temp2 + tx] = copycolour;
       }
@@ -1531,11 +1573,11 @@ void CalculateDarkMirrorAuxColours(void)
 
 void RenderSingleBarsDarkMirror()
 {
-  int x, y, middle = (draw_height / 3 / y_spacing) * y_spacing;
+  int middle = (draw_height / 3 / y_spacing) * y_spacing;
 
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
-    for(y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
+    int x = i * total_width;
+    for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
 	  _ASSERT(y * 3 / 2 < 255);
       rgbbuffer[(middle - y / 2) / y_spacing * y_spacing * image_width + x] = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
       rgbbuffer[(middle + y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
@@ -1553,19 +1595,19 @@ void RenderWideBarsDarkMirror()
 {
   // note that middle is actually 1/3 of the screen.  The dark reflection is in the bottom
   // 1/3 of the screen and the top 2/3 is the full colour bars.
-  int x, y, tx, temp, temp2, x_stop, middle = (draw_height / 3 / y_spacing) * y_spacing;
+  int middle = (draw_height / 3 / y_spacing) * y_spacing;
   COLORREF copycolour, copycolour2;
 
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
-    x_stop = i * total_width + band_width;
-    for(y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
+    int x = i * total_width;
+    int x_stop = i * total_width + band_width;
+    for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
 	  _ASSERT(y * 3 / 2 < 255);
       copycolour = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
       copycolour2 = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
-      temp = (middle + y) * image_width;
-      temp2 = (middle - y / 2) / y_spacing * y_spacing * image_width;
-      for(tx = x; tx < x_stop; tx++) {
+      int temp = (middle + y) * image_width;
+      int temp2 = (middle - y / 2) / y_spacing * y_spacing * image_width;
+      for(int tx = x; tx < x_stop; tx++) {
         rgbbuffer[temp2 + tx] = copycolour2;
         rgbbuffer[temp + tx] = copycolour;
       }
@@ -1574,11 +1616,11 @@ void RenderWideBarsDarkMirror()
     if(peaklevel[i]) {
       copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
       copycolour2 = AuxColour[1][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width;
+      int temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width;
       // note: *2/6 is used as a reduced *2/3*2 in order to calculate the location for the peak
       // if reduced to just /3 then with some window heights the bars will be drawn higher than
       // the peaks due to rounding errors.
-      temp2 = (middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width;
+      int temp2 = (middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width;
       do{
         rgbbuffer[temp2 + x] = copycolour2;
         rgbbuffer[temp + x] = copycolour;
@@ -1605,7 +1647,7 @@ void RenderSingleBarsWaveyReflection()
   static int wavechange[4] = {0,18,32,0};
   static int wavestart = 2, wavedivisor = 3, oldvolume = 0; //, wavedelay = 0;
   bool draw_y = true;
-  int x, y, middle = (draw_height / 3 / y_spacing) * y_spacing, wave, volume = 0;
+  int middle = (draw_height / 3 / y_spacing) * y_spacing, volume = 0;
 
   //if(!(++wavedelay %= 5))
     //if(!(wavestart--))
@@ -1631,9 +1673,9 @@ void RenderSingleBarsWaveyReflection()
   }
 
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
-    wave = wavestart;   // restart the wave drawing offset
-    for(y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
+    int x = i * total_width;
+    int wave = wavestart;   // restart the wave drawing offset
+    for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
 	  _ASSERT(y * 3 / 2 < 255);
 	  if(x > 1 && x < draw_width - 2 && y / 2 > 0)
         rgbbuffer[(middle - y / 2) / y_spacing * y_spacing * image_width + x + waves[wave] / wavedivisor] = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
@@ -1663,8 +1705,7 @@ void RenderWideBarsWaveyReflection()
   static int wavechange[4] = {0,18,32,0};
   static int wavestart = 2, wavedivisor = 3, oldvolume = 0;
   bool draw_y = true;
-  int x, y, tx, temp, temp2, x_stop, middle = (draw_height / 3 / y_spacing) * y_spacing;
-  int wave, volume = 0;
+  int middle = (draw_height / 3 / y_spacing) * y_spacing, volume = 0;
   COLORREF copycolour, copycolour2;
 
   //if(!(wavestart--))
@@ -1690,16 +1731,16 @@ void RenderWideBarsWaveyReflection()
   }
 
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
-    x_stop = x + band_width;
-    wave = wavestart;
-    for(y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
+    int x = i * total_width;
+    int x_stop = x + band_width;
+    int wave = wavestart;
+    for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
 	  _ASSERT(y * 3 / 2 < 255);
       copycolour = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
       copycolour2 = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
-      temp = (middle + y) * image_width;
-      temp2 = (middle - y / 2) / y_spacing * y_spacing * image_width + waves[wave] / wavedivisor;
-      for(tx = x; tx < x_stop; tx++) {
+      int temp = (middle + y) * image_width;
+      int temp2 = (middle - y / 2) / y_spacing * y_spacing * image_width + waves[wave] / wavedivisor;
+      for(int tx = x; tx < x_stop; tx++) {
         if(tx > 1 && tx < draw_width - 2 && y / 2 > 0)
           rgbbuffer[temp2 + tx] = copycolour2;
         rgbbuffer[temp + tx] = copycolour;
@@ -1713,11 +1754,11 @@ void RenderWideBarsWaveyReflection()
       wave = (peaklevel[i] / 6 + wavestart) % 16;
       copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
       copycolour2 = AuxColour[2][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width;
+      int temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width;
       // note: *2/6 is used as a reduced *2/3*2 in order to calculate the location for the peak
       // if reduced to just /3 then with some window heights the bars will be drawn higher than
       // the peaks due to rounding errors.
-      temp2 = (middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width + waves[wave] / wavedivisor;
+      int temp2 = (middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width + waves[wave] / wavedivisor;
       do{
         if(x > 1 && x < draw_width - 2)
           rgbbuffer[temp2 + x] = copycolour2;
@@ -1738,63 +1779,59 @@ void CalculateShadowAuxColours(void)
 
 void RenderSingleBarsShadow()
 {
-  int x, y;
-
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
+    int x = i * total_width;
 
     if(levelbuffer[1][i] < level[i])
       levelbuffer[1][i] = level[i];
     else
       levelbuffer[1][i]--;
 
-	for(y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+	for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       rgbbuffer[y * image_width + x] = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
 	}
 
-	for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
 	}
 
     if(peaklevel[i])
       rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-
   }
 }
 
 void RenderWideBarsShadow()
 {
-  int x, y, tx, temp, x_stop;
   COLORREF copycolour;
 
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
-    x_stop = i * total_width + band_width;
+    int x = i * total_width;
+    int x_stop = i * total_width + band_width;
 
     if(levelbuffer[1][i] < level[i])
       levelbuffer[1][i] = level[i];
     else
       levelbuffer[1][i]--;
 
-    for(y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+    for(int y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       copycolour = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
-      for(tx = x; tx < x_stop; tx++)
+      for(int tx = x; tx < x_stop; tx++)
         rgbbuffer[y * image_width + tx] = copycolour;
     }
 
-    for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       copycolour = FreqBarColour[colour_lookup[level[i]][y]];
-      for(tx = x; tx < x_stop; tx++)
+      for(int tx = x; tx < x_stop; tx++)
         rgbbuffer[y * image_width + tx] = copycolour;
     }
 
     if(peaklevel[i]) {
       copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
+      int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
       do{
         rgbbuffer[temp + x] = copycolour;
       }while(++x < x_stop);
@@ -1844,18 +1881,16 @@ void RenderSingleBarsFadeShadow()
 
     if(peaklevel[i])
       rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-
   }
 }
 
 void RenderWideBarsFadeShadow()
 {
-  int x, y, tx, temp, x_stop;
   COLORREF copycolour;
 
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
-    x_stop = i * total_width + band_width;
+    int x = i * total_width;
+    int x_stop = i * total_width + band_width;
 
     if(levelbuffer[1][i] < level[i] || !(levelbuffer[2][i]--)) {
       levelbuffer[1][i] = level[i];
@@ -1864,23 +1899,23 @@ void RenderWideBarsFadeShadow()
     //else
     //  levelbuffer[1][i]--;
 
-    for(y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+    for(int y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       copycolour = SmallAuxColour[levelbuffer[2][i] / 4][colour_lookup[levelbuffer[1][i]][y] / 2];
-      for(tx = x; tx < x_stop; tx++)
+      for(int tx = x; tx < x_stop; tx++)
         rgbbuffer[y * image_width + tx] = copycolour;
     }
 
-    for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       copycolour = FreqBarColour[colour_lookup[level[i]][y]];
-      for(tx = x; tx < x_stop; tx++)
+      for(int tx = x; tx < x_stop; tx++)
         rgbbuffer[y * image_width + tx] = copycolour;
     }
 
     if(peaklevel[i]) {
       copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
+      int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
       do{
         rgbbuffer[temp + x] = copycolour;
       }while(++x < x_stop);
@@ -1903,10 +1938,8 @@ void CalculateDoubleShadowAuxColours(void)
 
 void RenderSingleBarsDoubleShadow()
 {
-  int x, y;
-
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
+    int x = i * total_width;
 
     if(levelbuffer[2][i] < level[i])
       levelbuffer[2][i] = level[i];
@@ -1921,35 +1954,33 @@ void RenderSingleBarsDoubleShadow()
     else
       levelbuffer[1][i]--;
 
-	for(y = (int)(levelbuffer[2][i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+	for(int y = (int)(levelbuffer[2][i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       rgbbuffer[y * image_width + x] = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
 	}
 
-	for(y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[2][i] / level_height_scaler); y += y_spacing) {
+	for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[2][i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       rgbbuffer[y * image_width + x] = AuxColour[1][colour_lookup[levelbuffer[2][i]][y]];
 	}
 
-	for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
 	  _ASSERT(y < 255);
       rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
 	}
 
     if(peaklevel[i])
       rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-
   }
 }
 
 void RenderWideBarsDoubleShadow()
 {
-  int x, y, tx, temp, x_stop;
   COLORREF copycolour;
 
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
-    x_stop = i * total_width + band_width;
+    int x = i * total_width;
+    int x_stop = i * total_width + band_width;
 
     if(levelbuffer[2][i] < level[i])
       levelbuffer[2][i] = level[i];
@@ -1964,27 +1995,27 @@ void RenderWideBarsDoubleShadow()
     else
       levelbuffer[1][i]--;
 
-    for(y = (int)(levelbuffer[2][i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+    for(int y = (int)(levelbuffer[2][i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
       copycolour = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
-      for(tx = x; tx < x_stop; tx++)
+      for(int tx = x; tx < x_stop; tx++)
         rgbbuffer[y * image_width + tx] = copycolour;
     }
 
-    for(y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[2][i] / level_height_scaler); y += y_spacing) {
+    for(int y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[2][i] / level_height_scaler); y += y_spacing) {
       copycolour = AuxColour[1][colour_lookup[levelbuffer[2][i]][y]];
-      for(tx = x; tx < x_stop; tx++)
+      for(int tx = x; tx < x_stop; tx++)
         rgbbuffer[y * image_width + tx] = copycolour;
     }
 
-    for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
       copycolour = FreqBarColour[colour_lookup[level[i]][y]];
-      for(tx = x; tx < x_stop; tx++)
+      for(int tx = x; tx < x_stop; tx++)
         rgbbuffer[y * image_width + tx] = copycolour;
     }
 
     if(peaklevel[i]) {
       copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
+      int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
       do{
         rgbbuffer[temp + x] = copycolour;
       }while(++x < x_stop);
@@ -2008,7 +2039,6 @@ void CalculateSmokeAuxColours(void)
 void RenderSingleBarsSmoke()
 {
   static int movesmoke = 1;
-  int x, y;
 
   if(!(--movesmoke)) {
     for(int i = bands - 1; i > 0; i--)
@@ -2018,22 +2048,21 @@ void RenderSingleBarsSmoke()
   }
 
   for(int i = 0; i < bands; i++) {
-    x = i * total_width;
+    int x = i * total_width;
 
     if(levelbuffer[1][i] < level[i])
       levelbuffer[1][i] = level[i];
     else
       levelbuffer[1][i] -= m_rand.next() % 4;
 
-    for(y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing)
+    for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing)
       rgbbuffer[y * image_width + x] = SmallAuxColour[levelbuffer[1][i] / 72][colour_lookup[levelbuffer[1][i]][y] / 2];
 
-    for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing)
+    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing)
       rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
 
     if(peaklevel[i])
       rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-
   }
 }
 
@@ -2205,7 +2234,6 @@ void PeakLevelFallAndRise()
 void PeakLevelRiseFall()
 {
   int level_dur, fall_speed = 5;
-  float riseamount, rise;
 
   for(int level = 1; level < 256; level++) {
     if(peakchangerate < 256 - 255 / fall_speed)
@@ -2215,8 +2243,8 @@ void PeakLevelRiseFall()
 
     peak_level_length[level] = (short)(level_dur + level / fall_speed);
 
-    riseamount = 25.0f / (level_dur + 1);
-    rise = 0.0f;
+    float riseamount = 25.0f / (level_dur + 1);
+    float rise = 0.0f;
     for(int i = 0; i <= level_dur; i++, rise += riseamount) {
       peak_level_lookup[level][peak_level_length[level] - i] = (short)(level + rise);
       if(peak_level_lookup[level][peak_level_length[level] - i] > 255)
@@ -2234,8 +2262,6 @@ void PeakLevelRiseFall()
 // make the peaks instantly rise quickly like sparks
 void PeakLevelSparks()
 {
-  int risevalue, level_dur;
-
   for(int level = 1; level < 256; level++) {
     if(peakchangerate < 200)
       peak_level_length[level] = (short)(peakchangerate + (m_rand.next() % 56));
@@ -2243,11 +2269,11 @@ void PeakLevelSparks()
     else
       peak_level_length[level] = (short)(peakchangerate);
 
-    level_dur = peak_level_length[level] / 2 + (m_rand.next() % peak_level_length[level] / 3);
+    int level_dur = peak_level_length[level] / 2 + (m_rand.next() % peak_level_length[level] / 3);
     for(int i = peak_level_length[level]; i > level_dur; i--)
       peak_level_lookup[level][i] = (short)(level);
 
-    risevalue = (m_rand.next() % 5) + 3;
+    int risevalue = (m_rand.next() % 5) + 3;
     for(int i = level_dur, rise = risevalue; i >= 0; i--, rise += risevalue) {
       if(level + rise > 255)
         peak_level_lookup[level][i] = 0;
@@ -2257,68 +2283,27 @@ void PeakLevelSparks()
   }
 }
 
-// window procedure for our window
-LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+bool ProcessMenuResult(UINT command, HWND parent)
 {
-	PAINTSTRUCT ps;
-	HDC hdc;
-	switch (message) {
-		case WM_PAINT:
-			hdc = BeginPaint(hwnd,&ps);   // BeginPaint clips to only the
-			EraseWindow(hdc);
-			SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height, 0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
-			EndPaint(hwnd,&ps);
-			return 0;
-		case WM_RBUTTONDOWN:
+	switch (LOWORD(command))
 			{
-				POINT pt;
-				pt.x = LOWORD(lParam);
-				pt.y = HIWORD(lParam);
-				ClientToScreen(hwnd, &pt);
-				TrackPopupMenu(popupmenu, TPM_TOPALIGN, pt.x, pt.y, 0, hwnd, NULL);
-			}
-			return 0;
-		case WM_DESTROY:
-			PostQuitMessage(0);
-			return 0;
-		case WM_KEYDOWN:  // fall through
-		case WM_KEYUP:
-			{	// get this_mod from our window's user data
-				winampVisModule *this_mod = (winampVisModule *)GetWindowLong(hwnd, GWL_USERDATA);
-				PostMessage(this_mod->hwndParent, message, wParam, lParam);
-			}
-			return 0;
-		case WM_WINDOWPOSCHANGED:
-			{	// update the window size
-				RECT r;
-				//GetWindowRect(hwnd, &r);
-				//myWindowState.r = r;
-				GetClientRect(hwnd, &r);
-				win_width = r.right - r.left;
-				win_height = r.bottom - r.top;
-				CalculateAndUpdate();
-			}
-			return 0;
-		case WM_COMMAND:
 			// process selections for popup menu
-			switch(LOWORD(wParam)) {
 			case ID_VIS_CFG:
 			case CM_CONFIG:
-				{	// get this_mod from our window's user data
-					winampVisModule *this_mod = (winampVisModule *)GetWindowLong(hwnd, GWL_USERDATA);
-					this_mod->Config(this_mod);
+			{
+				AtAnSt_Vis_mod.Config(&AtAnSt_Vis_mod);
 				}
-				return 0;
+			break;
 			case CM_PROFILES:
-				DialogBox(AtAnSt_Vis_mod.hDllInstance, MAKEINTRESOURCE(IDD_SAVEOPTIONS), hatan, (DLGPROC)SaveDialogProc);
-				return 0;
+			WASABI_API_DIALOGBOXW(IDD_SAVEOPTIONS, hatan, (DLGPROC)SaveDialogProc);
+			break;
 			case CM_CLOSE:
-				DestroyWindow(hwnd);
-				return 0;
+			DestroyWindow(parent);
+			break;
 			case CM_ABOUT:
 				//MessageBox(hatan, cszAboutText, cszAboutCaption, MB_ICONINFORMATION);
 				AboutMessage();
-				return 0;
+			break;
 			case ID_VIS_NEXT:
 				LoadNextProfile();
 				SaveDialog_UpdateProfilesProperty();
@@ -2328,12 +2313,10 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				SaveDialog_UpdateProfilesProperty();
 				break;
 			case ID_VIS_RANDOM:
-				{	// get this_mod from our window's user data
-					winampVisModule *this_mod = (winampVisModule *)GetWindowLong(hwnd, GWL_USERDATA);
-					// keep random button unchecked
-					SendMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_CB_VISRANDOM);
+			{	// keep random button unchecked
+				SendMessage(AtAnSt_Vis_mod.hwndParent, WM_WA_IPC, 0, IPC_CB_VISRANDOM);
 					// if not being asked about random state, load a random profile
-					if(HIWORD(wParam) != 0xFFFF) {
+				if(HIWORD(command) != 0xFFFF) {
 					    LoadProfileNumber(m_rand.next() % CountProfileFiles());
 						SaveDialog_UpdateProfilesProperty();
 					}
@@ -2345,10 +2328,109 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				{
 					POINT pt;
 					if(GetCursorPos(&pt))
-						TrackPopupMenu(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, 0, hwnd, NULL);
-				}
-				return 0;
+#ifdef WACUP_BUILD
+					// we force the un-skinned version of the menu
+					// as us being on a different thread doesn't
+					// work with how the gen_ml skinning works
+					TrackPopup(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, parent, FALSE);
+#else
+					TrackPopupMenu(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, 0, parent, NULL);
+#endif
 			}
+			break;
+		default:
+			{
+				return false;
+			}
+	}
+	return true;
+}
+
+// window procedure for our embedded window
+LRESULT CALLBACK EmdedWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
+							  UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+	switch (message)
+	{
+		case WM_COMMAND:	// for what's handled from the accel table
+		{
+			return ProcessMenuResult(wParam, hwnd);
+		}
+		case WM_CONTEXTMENU:
+			{
+				short xPos = GET_X_LPARAM(lParam);
+				short yPos = GET_Y_LPARAM(lParam);
+
+				// this will handle the menu being shown not via the mouse actions
+				// so is positioned just below the header if no selection but there's a queue
+				// or below the item selected (or the no files in queue entry)
+				if (xPos == -1 || yPos == -1)
+				{
+					RECT rc = {0};
+					GetWindowRect(GetWindow(hwnd, GW_CHILD), &rc);
+					xPos = (short)rc.left;
+					yPos = (short)rc.top;
+				}
+
+#ifdef WACUP_BUILD
+				// we force the un-skinned version of the menu
+				// as us being on a different thread doesn't
+				// work with how the gen_ml skinning works
+				TrackPopup(popupmenu, TPM_LEFTALIGN | TPM_LEFTBUTTON |
+						   TPM_TOPALIGN | TPM_RIGHTBUTTON, xPos, yPos, hwnd, FALSE);
+#else
+				TrackPopupMenu(popupmenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_TOPALIGN |
+							   TPM_RIGHTBUTTON, xPos, yPos, 0, hwnd, NULL);
+#endif
+			}
+			break;
+	}
+	return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+// window procedure for our window
+INT_PTR CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message) {
+		case WM_PAINT:
+			{
+				PAINTSTRUCT ps = {0};
+				HDC hdc = BeginPaint(hwnd,&ps);   // BeginPaint clips to only the
+				EraseWindow(hdc);
+				SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height, 0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
+				EndPaint(hwnd,&ps);
+			}
+			break;
+		case WM_ERASEBKGND:
+			{
+				return 1;
+				}
+		case WM_KEYDOWN:  // fall through
+		case WM_KEYUP:
+		case WM_CHAR:
+		case WM_MOUSEWHEEL:
+			{	// get this_mod from our window's user data
+				winampVisModule *this_mod = (winampVisModule *)GetWindowLong(hwnd, GWL_USERDATA);
+				PostMessage(this_mod->hwndParent, message, wParam, lParam);
+			}
+			break;
+		case WM_WINDOWPOSCHANGED:
+			{	// update the window size
+				RECT r;
+				//GetWindowRect(hwnd, &r);
+				//myWindowState.r = r;
+				GetClientRect(hwnd, &r);
+				win_width = r.right - r.left;
+				win_height = r.bottom - r.top;
+				CalculateAndUpdate();
+			}
+			break;
+		case WM_COMMAND:	// for what's handled from the accel table
+		{
+			return ProcessMenuResult(wParam, hwnd);
+			}
+		case WM_DESTROY:
+			PostQuitMessage(0);
 			break;
 		case WM_OPEN_PROPERTYWIN:
 			OpenConfigStereoWindow((winampVisModule *)GetWindowLong(hwnd, GWL_USERDATA));
@@ -2363,10 +2445,10 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				else if(wParam == PROP_WIN_CANCEL)
 					LoadCurrentProfile();
 			}
+			break;
+	}
 			return 0;
 	}
-	return DefWindowProc(hwnd,message,wParam,lParam);
-}
 
 // post the config window close request message to the parent if not yet sent
 void ConfigDialog_PostCloseMessage(WPARAM wParam)
@@ -2381,13 +2463,13 @@ BOOL ConfigDialog_Notify(HWND hwndDlg, LPARAM lParam)
 {
 	switch (((LPNMHDR)lParam)->code) {
 	case PSN_RESET: // Cancel hit
-		if(hatan)
+		if(IsWindow(hatan))
 			ConfigDialog_PostCloseMessage(PROP_WIN_CANCEL);
 		SetWindowLong(hwndDlg, DWL_MSGRESULT, PSNRET_NOERROR);
 		return TRUE;
 	case PSN_APPLY: // Apply/OK hit
 		// if vis window and OK clicked, request to close properties
-		if(hatan && ((LPPSHNOTIFY)lParam)->lParam == TRUE)
+		if(IsWindow(hatan) && ((LPPSHNOTIFY)lParam)->lParam == TRUE)
 			ConfigDialog_PostCloseMessage(PROP_WIN_OK);
 		else // Apply clicked
 			SaveTempCurrentSettings();
@@ -2398,13 +2480,13 @@ BOOL ConfigDialog_Notify(HWND hwndDlg, LPARAM lParam)
 	}
 }
 
-BOOL ConfigDialog_Common(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+BOOL ConfigDialog_Common(HWND hwndDlg, UINT uMsg, WPARAM /*wParam*/, LPARAM lParam)
 {
   switch(uMsg) {
     case WM_NOTIFY:
 		return ConfigDialog_Notify(hwndDlg, lParam);
 	case WM_CONFIG_OPEN_ERROR:
-		MessageBox(hwndDlg, "Please close the properties window before starting the plug-in.", "Configure is open!", MB_OK);
+		MessageBoxA(hwndDlg, "Please close the properties window before starting the plug-in.", "Configure is open!", MB_OK);
 		break;
     default: return false;
   }
@@ -2413,15 +2495,16 @@ BOOL ConfigDialog_Common(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 void SetDlgItemFloatText(HWND hwndDlg, int nDlgItem, float fValue)
 {
-	char sz[64];
-	sprintf(sz, "%.2f", (double)fValue);
+	// TODO deal with localisation quirks?
+	wchar_t sz[64] = {0};
+	_snwprintf(sz, 64, L"%.2f", (double)fValue);
 	SetDlgItemText(hwndDlg, nDlgItem, sz);
 }
 
 // for the Analyzer section
 BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-  char t[16] = {0};
+  wchar_t t[16] = {0};
   int i;
   //RECT r;
   switch(uMsg) {
@@ -2436,58 +2519,58 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
       SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 75));
       SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_SETTICFREQ, (WPARAM)5, 0);
       SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_SETPOS, (WPARAM)true, (LPARAM)falloffrate);
-      SetDlgItemText(hwndDlg, IDC_FALLOFFVAL, itoa(falloffrate, t, 10));
+      SetDlgItemText(hwndDlg, IDC_FALLOFFVAL, _itow(falloffrate, t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_PEAKCHANGE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_PEAKCHANGE, TBM_SETTICFREQ, (WPARAM)10, 0);
       SendDlgItemMessage(hwndDlg, IDC_PEAKCHANGE, TBM_SETPOS, (WPARAM)true, (LPARAM)peakchangerate);
-      SetDlgItemText(hwndDlg, IDC_PEAKCHANGEVAL, itoa(peakchangerate, t, 10));
+      SetDlgItemText(hwndDlg, IDC_PEAKCHANGEVAL, _itow(peakchangerate, t, 10));
 
       //SendDlgItemMessage(hwndDlg, IDC_FREQHIGH, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 575));
       //SendDlgItemMessage(hwndDlg, IDC_FREQHIGH, TBM_SETTICFREQ, (WPARAM)10, 0);
       //SendDlgItemMessage(hwndDlg, IDC_FREQHIGH, TBM_SETPOS, (WPARAM)true, (LPARAM)high_freq);
-      //SetDlgItemText(hwndDlg, IDC_FREQHIGHVAL, itoa((int)(high_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FREQHIGHVAL, _itow((int)(high_freq * FREQ_SCALE), t, 10));
 
       //SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 575));
       //SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_SETTICFREQ, (WPARAM)10, 0);
       //SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_SETPOS, (WPARAM)true, (LPARAM)low_freq);
-      //SetDlgItemText(hwndDlg, IDC_FREQLOWVAL, itoa((int)(low_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FREQLOWVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_BANDWIDTH, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 15));
       SendDlgItemMessage(hwndDlg, IDC_BANDWIDTH, TBM_SETTICFREQ, (WPARAM)1, 0);
       SendDlgItemMessage(hwndDlg, IDC_BANDWIDTH, TBM_SETPOS, (WPARAM)true, (LPARAM)requested_band_width);
-      //SetDlgItemText(hwndDlg, IDC_BANDWIDTHVAL, itoa((int)(low_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_BANDWIDTHVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_XSPACE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 10));
       SendDlgItemMessage(hwndDlg, IDC_XSPACE, TBM_SETTICFREQ, (WPARAM)1, 0);
       SendDlgItemMessage(hwndDlg, IDC_XSPACE, TBM_SETPOS, (WPARAM)true, (LPARAM)x_spacing);
-      //SetDlgItemText(hwndDlg, IDC_XSPACEVAL, itoa((int)(low_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_XSPACEVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_YSPACE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 7));
       SendDlgItemMessage(hwndDlg, IDC_YSPACE, TBM_SETTICFREQ, (WPARAM)1, 0);
       SendDlgItemMessage(hwndDlg, IDC_YSPACE, TBM_SETPOS, (WPARAM)true, (LPARAM)y_spacing);
-      //SetDlgItemText(hwndDlg, IDC_YSPACEVAL, itoa((int)(low_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_YSPACEVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_LATENCY, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 120));
       SendDlgItemMessage(hwndDlg, IDC_LATENCY, TBM_SETTICFREQ, (WPARAM)10, 0);
       SendDlgItemMessage(hwndDlg, IDC_LATENCY, TBM_SETPOS, (WPARAM)true, (LPARAM)AtAnSt_Vis_mod.latencyMs);
-      SetDlgItemText(hwndDlg, IDC_LATENCYVAL, itoa(AtAnSt_Vis_mod.latencyMs, t, 10));
+      SetDlgItemText(hwndDlg, IDC_LATENCYVAL, _itow(AtAnSt_Vis_mod.latencyMs, t, 10));
 
       //SendDlgItemMessage(hwndDlg, IDC_WINHEIGHT, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(8, MAX_WIN_HEIGHT));
       //SendDlgItemMessage(hwndDlg, IDC_WINHEIGHT, TBM_SETTICFREQ, (WPARAM)10, 0);
       //SendDlgItemMessage(hwndDlg, IDC_WINHEIGHT, TBM_SETPOS, (WPARAM)true, (LPARAM)win_height);
-      //SetDlgItemText(hwndDlg, IDC_WINHEIGHTVAL, itoa(win_height, t, 10));
+      //SetDlgItemText(hwndDlg, IDC_WINHEIGHTVAL, _itow(win_height, t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_FFTENVELOPE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 500));
       SendDlgItemMessage(hwndDlg, IDC_FFTENVELOPE, TBM_SETTICFREQ, (WPARAM)10, 0);
       SendDlgItemMessage(hwndDlg, IDC_FFTENVELOPE, TBM_SETPOS, (WPARAM)true, (LPARAM)(int)(fFftEnvelope * 100.0001));
-      //SetDlgItemText(hwndDlg, IDC_FFTENVELOPEVAL, itoa((int)(fFftEnvelope * 100.0001), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FFTENVELOPEVAL, _itow((int)(fFftEnvelope * 100.0001), t, 10));
 	  SetDlgItemFloatText(hwndDlg, IDC_FFTENVELOPEVAL, fFftEnvelope);
 
       SendDlgItemMessage(hwndDlg, IDC_FFTSCALE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 250));
       SendDlgItemMessage(hwndDlg, IDC_FFTSCALE, TBM_SETTICFREQ, (WPARAM)10, 0);
       SendDlgItemMessage(hwndDlg, IDC_FFTSCALE, TBM_SETPOS, (WPARAM)true, (LPARAM)(int)(fFftScale * 10.0001));
-      //SetDlgItemText(hwndDlg, IDC_FFTSCALEVAL, itoa((int)(fFftScale * 10.001), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FFTSCALEVAL, _itow((int)(fFftScale * 10.001), t, 10));
   	  SetDlgItemFloatText(hwndDlg, IDC_FFTSCALEVAL, fFftScale);
 
 
@@ -2507,17 +2590,17 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
       return true;
     case WM_HSCROLL:
       falloffrate = (int)SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_GETPOS, 0, 0);
-      SetDlgItemText(hwndDlg, IDC_FALLOFFVAL, itoa(falloffrate, t, 10));
+      SetDlgItemText(hwndDlg, IDC_FALLOFFVAL, _itow(falloffrate, t, 10));
 
       AtAnSt_Vis_mod.latencyMs = (int)SendDlgItemMessage(hwndDlg, IDC_LATENCY, TBM_GETPOS, 0, 0);
-      SetDlgItemText(hwndDlg, IDC_LATENCYVAL, itoa(AtAnSt_Vis_mod.latencyMs, t, 10));
+      SetDlgItemText(hwndDlg, IDC_LATENCYVAL, _itow(AtAnSt_Vis_mod.latencyMs, t, 10));
 
       fFftEnvelope = (float)SendDlgItemMessage(hwndDlg, IDC_FFTENVELOPE, TBM_GETPOS, 0, 0) / 99.9990f;
-      //SetDlgItemText(hwndDlg, IDC_FFTENVELOPEVAL, itoa((int)(fFftEnvelope * 100.0001), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FFTENVELOPEVAL, _itow((int)(fFftEnvelope * 100.0001), t, 10));
 	  SetDlgItemFloatText(hwndDlg, IDC_FFTENVELOPEVAL, fFftEnvelope);
 
       fFftScale = (float)SendDlgItemMessage(hwndDlg, IDC_FFTSCALE, TBM_GETPOS, 0, 0) / 9.9990f;
-      //SetDlgItemText(hwndDlg, IDC_FFTSCALEVAL, itoa((int)(fFftScale * 10.001), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FFTSCALEVAL, _itow((int)(fFftScale * 10.001), t, 10));
   	  SetDlgItemFloatText(hwndDlg, IDC_FFTSCALEVAL, fFftScale);
 
       requested_band_width = (int)SendDlgItemMessage(hwndDlg, IDC_BANDWIDTH, TBM_GETPOS, 0, 0);
@@ -2531,7 +2614,7 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
             high_freq = low_freq + 1;
             SendDlgItemMessage(hwndDlg, IDC_FREQHIGH, TBM_SETPOS, (WPARAM)true, (LPARAM)high_freq);
           }
-          SetDlgItemText(hwndDlg, IDC_FREQHIGHVAL, itoa((int)(high_freq * FREQ_SCALE), t, 10));
+          SetDlgItemText(hwndDlg, IDC_FREQHIGHVAL, _itow((int)(high_freq * FREQ_SCALE), t, 10));
           break;
         case IDC_FREQLOW:
           /*low_freq = (int)SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_GETPOS, 0, 0);
@@ -2539,18 +2622,18 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
             low_freq = high_freq - 1;
             SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_SETPOS, (WPARAM)true, (LPARAM)low_freq);
           }
-          SetDlgItemText(hwndDlg, IDC_FREQLOWVAL, itoa((int)(low_freq * FREQ_SCALE), t, 10));
+          SetDlgItemText(hwndDlg, IDC_FREQLOWVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
           break;*/
         case IDC_PEAKCHANGE:
           peakchangerate = (int)SendDlgItemMessage(hwndDlg, IDC_PEAKCHANGE, TBM_GETPOS, 0, 0);
-          SetDlgItemText(hwndDlg, IDC_PEAKCHANGEVAL, itoa(peakchangerate, t, 10));
+          SetDlgItemText(hwndDlg, IDC_PEAKCHANGEVAL, _itow(peakchangerate, t, 10));
           for(i = 0; i < bands; i++)
             if(peakchange[i] > peakchangerate)
               peakchange[i] = peakchangerate;
           break;
         /*case IDC_WINHEIGHT:
           //win_height = (int)SendDlgItemMessage(hwndDlg, IDC_WINHEIGHT, TBM_GETPOS, (WPARAM)true, (LPARAM)win_height);
-          //SetDlgItemText(hwndDlg, IDC_WINHEIGHTVAL, itoa(win_height, t, 10));
+          //SetDlgItemText(hwndDlg, IDC_WINHEIGHTVAL, _itow(win_height, t, 10));
           //GetWindowRect(hatan,&r);
           //SetWindowPos(hatan, GetParent(hatan), 0, 0, win_width, win_height, SWP_NOACTIVATE | SWP_NOMOVE);
           //RedrawWindow(hatan, NULL, NULL, RDW_INVALIDATE);  // force complete redraw
@@ -3083,7 +3166,7 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
   static int left = 255, right = 0; // selected positions
   //static int selected_border = 0; // selected border colour
   static COLORREF current_colour = 0; // current selected colour
-  char t[16] = {0};
+  wchar_t t[16] = {0};
 
   switch(uMsg) {
     case WM_SHOWWINDOW:
@@ -3112,23 +3195,23 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 
       SendDlgItemMessage(hwndDlg, IDC_LEFTSELECT, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_LEFTSELECT, TBM_SETPOS, (WPARAM)true, 255 - left);
-      SetDlgItemText(hwndDlg, IDC_LEFTVAL, itoa(left, t, 10));
+      SetDlgItemText(hwndDlg, IDC_LEFTVAL, _itow(left, t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_RIGHTSELECT, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_RIGHTSELECT, TBM_SETPOS, (WPARAM)true, 255 - right);
-      SetDlgItemText(hwndDlg, IDC_RIGHTVAL, itoa(right, t, 10));
+      SetDlgItemText(hwndDlg, IDC_RIGHTVAL, _itow(right, t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETPOS, (WPARAM)true, GetBValue(current_colour));
-      SetDlgItemText(hwndDlg, IDC_REDVAL, itoa(GetBValue(current_colour), t, 10));
+      SetDlgItemText(hwndDlg, IDC_REDVAL, _itow(GetBValue(current_colour), t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_SETPOS, (WPARAM)true, GetGValue(current_colour));
-      SetDlgItemText(hwndDlg, IDC_GREENVAL, itoa(GetGValue(current_colour), t, 10));
+      SetDlgItemText(hwndDlg, IDC_GREENVAL, _itow(GetGValue(current_colour), t, 10));
 
       SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_SETPOS, (WPARAM)true, GetRValue(current_colour));
-      SetDlgItemText(hwndDlg, IDC_BLUEVAL, itoa(GetRValue(current_colour), t, 10));
+      SetDlgItemText(hwndDlg, IDC_BLUEVAL, _itow(GetRValue(current_colour), t, 10));
       DrawSolidColour(hwndDlg, current_colour, IDC_BITMAP_CURCOLOUR);  // draw the colour box
 
       // resize the Left & Right select track bars so the bar = exactly 255
@@ -3159,7 +3242,7 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
       r.right = p.x;
       r.bottom = p.y;
       MoveWindow(GetDlgItem(hwndDlg, IDC_RIGHTSELECT), r.left, r.top, r.right - r.left, 274, true);
-      //MessageBox(hwndDlg,itoa(r.bottom-r.top,t,10),"Uh Oh",MB_OK);
+      //MessageBox(hwndDlg,_itow(r.bottom-r.top,t,10),"Uh Oh",MB_OK);
 
       // check off the defaults
       if(colour_table == PeakColour)
@@ -3186,14 +3269,14 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 UpdateControls:
       DrawColourRamp(hwndDlg, colour_table);  // draw the ramp
 
-      SetDlgItemText(hwndDlg, IDC_LEFTRVAL, itoa(GetBValue(colour_table[left]), t, 10));
-      SetDlgItemText(hwndDlg, IDC_LEFTGVAL, itoa(GetGValue(colour_table[left]), t, 10));
-      SetDlgItemText(hwndDlg, IDC_LEFTBVAL, itoa(GetRValue(colour_table[left]), t, 10));
+      SetDlgItemText(hwndDlg, IDC_LEFTRVAL, _itow(GetBValue(colour_table[left]), t, 10));
+      SetDlgItemText(hwndDlg, IDC_LEFTGVAL, _itow(GetGValue(colour_table[left]), t, 10));
+      SetDlgItemText(hwndDlg, IDC_LEFTBVAL, _itow(GetRValue(colour_table[left]), t, 10));
       DrawSolidColour(hwndDlg, colour_table[left], IDC_BITMAP_LEFT);  // draw the colour box
 
-      SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, itoa(GetBValue(colour_table[right]), t, 10));
-      SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, itoa(GetGValue(colour_table[right]), t, 10));
-      SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, itoa(GetRValue(colour_table[right]), t, 10));
+      SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, _itow(GetBValue(colour_table[right]), t, 10));
+      SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, _itow(GetGValue(colour_table[right]), t, 10));
+      SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, _itow(GetRValue(colour_table[right]), t, 10));
       DrawSolidColour(hwndDlg, colour_table[right], IDC_BITMAP_RIGHT);  // draw the colour box
 
       // draw the colour box for the border colour
@@ -3211,7 +3294,7 @@ UpdateControls:
       DeleteObject(bitmap);
       //bitmap = (HBITMAP)SendDlgItemMessage(hwndDlg, IDC_BITMAP_BORDER, STM_GETIMAGE, (WPARAM) IMAGE_BITMAP, 0);
       //DeleteObject(bitmap);
-      SaveUserColours();
+      WritePrivateProfileColourArray(L"UserColours", UserColours, 16, szMainIniFilename);
       return true;
     }
     case WM_HSCROLL:
@@ -3224,9 +3307,9 @@ UpdateControls:
             SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_GETPOS, 0, 0),
             SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_GETPOS, 0, 0));
 
-          SetDlgItemText(hwndDlg, IDC_REDVAL, itoa(GetBValue(current_colour), t, 10));
-          SetDlgItemText(hwndDlg, IDC_GREENVAL, itoa(GetGValue(current_colour), t, 10));
-          SetDlgItemText(hwndDlg, IDC_BLUEVAL, itoa(GetRValue(current_colour), t, 10));
+          SetDlgItemText(hwndDlg, IDC_REDVAL, _itow(GetBValue(current_colour), t, 10));
+          SetDlgItemText(hwndDlg, IDC_GREENVAL, _itow(GetGValue(current_colour), t, 10));
+          SetDlgItemText(hwndDlg, IDC_BLUEVAL, _itow(GetRValue(current_colour), t, 10));
           DrawSolidColour(hwndDlg, current_colour, IDC_BITMAP_CURCOLOUR);  // draw the colour box
           return true;
       }
@@ -3235,18 +3318,18 @@ UpdateControls:
       switch(GetDlgCtrlID((HWND)lParam)) {
         case IDC_LEFTSELECT:
           left = 255 - (int)SendDlgItemMessage(hwndDlg, IDC_LEFTSELECT, TBM_GETPOS, 0, 0);
-          SetDlgItemText(hwndDlg, IDC_LEFTVAL, itoa(left, t, 10));
-          SetDlgItemText(hwndDlg, IDC_LEFTRVAL, itoa(GetBValue(colour_table[left]), t, 10));
-          SetDlgItemText(hwndDlg, IDC_LEFTGVAL, itoa(GetGValue(colour_table[left]), t, 10));
-          SetDlgItemText(hwndDlg, IDC_LEFTBVAL, itoa(GetRValue(colour_table[left]), t, 10));
+          SetDlgItemText(hwndDlg, IDC_LEFTVAL, _itow(left, t, 10));
+          SetDlgItemText(hwndDlg, IDC_LEFTRVAL, _itow(GetBValue(colour_table[left]), t, 10));
+          SetDlgItemText(hwndDlg, IDC_LEFTGVAL, _itow(GetGValue(colour_table[left]), t, 10));
+          SetDlgItemText(hwndDlg, IDC_LEFTBVAL, _itow(GetRValue(colour_table[left]), t, 10));
           DrawSolidColour(hwndDlg, colour_table[left], IDC_BITMAP_LEFT);  // draw the colour box
           return true;
         case IDC_RIGHTSELECT:
           right = 255 - (int)SendDlgItemMessage(hwndDlg, IDC_RIGHTSELECT, TBM_GETPOS, 0, 0);
-          SetDlgItemText(hwndDlg, IDC_RIGHTVAL, itoa(right, t, 10));
-          SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, itoa(GetBValue(colour_table[right]), t, 10));
-          SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, itoa(GetGValue(colour_table[right]), t, 10));
-          SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, itoa(GetRValue(colour_table[right]), t, 10));
+          SetDlgItemText(hwndDlg, IDC_RIGHTVAL, _itow(right, t, 10));
+          SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, _itow(GetBValue(colour_table[right]), t, 10));
+          SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, _itow(GetGValue(colour_table[right]), t, 10));
+          SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, _itow(GetRValue(colour_table[right]), t, 10));
           DrawSolidColour(hwndDlg, colour_table[right], IDC_BITMAP_RIGHT);  // draw the colour box
           return true;
       }
@@ -3292,27 +3375,23 @@ UpdateControls:
               //RedrawWindow(hatan, NULL, NULL, RDW_INVALIDATE);  // force complete redraw
               return true;*/
             case IDC_PICKCOLOUR: {
-              CHOOSECOLOR colour;
+              CHOOSECOLOR colour = {0};
               colour.lStructSize = sizeof(CHOOSECOLOR);
               colour.hwndOwner = hwndDlg;
-              colour.hInstance = NULL;
               colour.rgbResult = FixCOLORREF(current_colour);  // result
               colour.lpCustColors = UserColours;   // user colours
               colour.Flags = CC_FULLOPEN | CC_RGBINIT;
-              colour.lCustData = NULL;
-              colour.lpfnHook = NULL;
-              colour.lpTemplateName = 0;
               if(ChooseColor(&colour)) {  // now choose the colour
                 // if a colour was chosen, fix it and update the display
                 current_colour = FixCOLORREF(colour.rgbResult);
                 SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETPOS, (WPARAM)true, GetBValue(current_colour));
-                SetDlgItemText(hwndDlg, IDC_REDVAL, itoa(GetBValue(current_colour), t, 10));
+                SetDlgItemText(hwndDlg, IDC_REDVAL, _itow(GetBValue(current_colour), t, 10));
 
                 SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_SETPOS, (WPARAM)true, GetGValue(current_colour));
-                SetDlgItemText(hwndDlg, IDC_GREENVAL, itoa(GetGValue(current_colour), t, 10));
+                SetDlgItemText(hwndDlg, IDC_GREENVAL, _itow(GetGValue(current_colour), t, 10));
 
                 SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_SETPOS, (WPARAM)true, GetRValue(current_colour));
-                SetDlgItemText(hwndDlg, IDC_BLUEVAL, itoa(GetRValue(current_colour), t, 10));
+                SetDlgItemText(hwndDlg, IDC_BLUEVAL, _itow(GetRValue(current_colour), t, 10));
                 DrawSolidColour(hwndDlg, current_colour, IDC_BITMAP_CURCOLOUR);  // draw the colour box
               }
               return true;
@@ -3339,14 +3418,14 @@ UpdateControls:
 						EraseWindow();
                   break;
               }
-              SetDlgItemText(hwndDlg, IDC_LEFTRVAL, itoa(GetBValue(colour_table[left]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_LEFTGVAL, itoa(GetGValue(colour_table[left]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_LEFTBVAL, itoa(GetRValue(colour_table[left]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_LEFTRVAL, _itow(GetBValue(colour_table[left]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_LEFTGVAL, _itow(GetGValue(colour_table[left]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_LEFTBVAL, _itow(GetRValue(colour_table[left]), t, 10));
               DrawSolidColour(hwndDlg, colour_table[left], IDC_BITMAP_LEFT);  // draw the colour box
 
-              SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, itoa(GetBValue(colour_table[right]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, itoa(GetGValue(colour_table[right]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, itoa(GetRValue(colour_table[right]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, _itow(GetBValue(colour_table[right]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, _itow(GetGValue(colour_table[right]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, _itow(GetRValue(colour_table[right]), t, 10));
               DrawSolidColour(hwndDlg, colour_table[right], IDC_BITMAP_RIGHT);  // draw the colour box
 
               DrawColourRamp(hwndDlg, colour_table);  // draw the ramp
@@ -3367,13 +3446,13 @@ UpdateControls:
                   break;
               }
               SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETPOS, (WPARAM)true, GetBValue(current_colour));
-              SetDlgItemText(hwndDlg, IDC_REDVAL, itoa(GetBValue(current_colour), t, 10));
+              SetDlgItemText(hwndDlg, IDC_REDVAL, _itow(GetBValue(current_colour), t, 10));
 
               SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_SETPOS, (WPARAM)true, GetGValue(current_colour));
-              SetDlgItemText(hwndDlg, IDC_GREENVAL, itoa(GetGValue(current_colour), t, 10));
+              SetDlgItemText(hwndDlg, IDC_GREENVAL, _itow(GetGValue(current_colour), t, 10));
 
               SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_SETPOS, (WPARAM)true, GetRValue(current_colour));
-              SetDlgItemText(hwndDlg, IDC_BLUEVAL, itoa(GetRValue(current_colour), t, 10));
+              SetDlgItemText(hwndDlg, IDC_BLUEVAL, _itow(GetRValue(current_colour), t, 10));
               DrawSolidColour(hwndDlg, current_colour, IDC_BITMAP_CURCOLOUR);  // draw the colour box
               return true;
             case IDC_FREQBARS:  // fall through
@@ -3392,14 +3471,14 @@ UpdateControls:
               }
               DrawColourRamp(hwndDlg, colour_table);  // draw the ramp
 
-              SetDlgItemText(hwndDlg, IDC_LEFTRVAL, itoa(GetBValue(colour_table[left]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_LEFTGVAL, itoa(GetGValue(colour_table[left]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_LEFTBVAL, itoa(GetRValue(colour_table[left]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_LEFTRVAL, _itow(GetBValue(colour_table[left]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_LEFTGVAL, _itow(GetGValue(colour_table[left]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_LEFTBVAL, _itow(GetRValue(colour_table[left]), t, 10));
               DrawSolidColour(hwndDlg, colour_table[left], IDC_BITMAP_LEFT);  // draw the colour box
 
-              SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, itoa(GetBValue(colour_table[right]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, itoa(GetGValue(colour_table[right]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, itoa(GetRValue(colour_table[right]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, _itow(GetBValue(colour_table[right]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, _itow(GetGValue(colour_table[right]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, _itow(GetRValue(colour_table[right]), t, 10));
               DrawSolidColour(hwndDlg, colour_table[right], IDC_BITMAP_RIGHT);  // draw the colour box
               return true;
             }
@@ -3414,13 +3493,13 @@ UpdateControls:
 // if the config win is open, update Profiles listbox
 void SaveDialog_UpdateProfilesProperty(void)
 {
-	if(hwndCurrentConfigProperty)
+	if(IsWindow(hwndCurrentConfigProperty))
 		PostMessage(hwndCurrentConfigProperty, WM_UPDATE_PROFILE_LIST, 0, 0);
 }
 
 void SaveDialog_LoadProfile(HWND hwndDlg)
 {
-	char szProfile[cnProfileNameBufLen];
+	wchar_t szProfile[cnProfileNameBufLen];
 	// check for text entered, and get it into selected
 	if(SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, WM_GETTEXT, cnProfileNameBufLen, (LPARAM)szProfile)) {
 		// look for exact match first
@@ -3448,7 +3527,7 @@ void SaveDialog_LoadProfile(HWND hwndDlg)
 // this is not meant to be displayed on a propertysheet
 BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
 {
-  char szProfile[cnProfileNameBufLen];
+  wchar_t szProfile[cnProfileNameBufLen] = {0};
 
   switch(uMsg) {
     case WM_INITDIALOG: {
@@ -3478,9 +3557,9 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
 					if(SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_FINDSTRINGEXACT, 0, (LPARAM)szProfile) == CB_ERR)
 						SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_ADDSTRING, 0, (LPARAM)szProfile);
 					else {
-						char message[64 + cnProfileNameBufLen];
-						wsprintf(message, "Are you sure you want to overwrite\n%s?", szProfile);
-						if(MessageBox(hwndDlg, message, "Confirm Save", MB_YESNO | MB_ICONEXCLAMATION) == IDNO)
+						wchar_t message[64 + cnProfileNameBufLen] = {0};
+						_snwprintf(message, ARRAYSIZE(message), L"Are you sure you want to overwrite\n%s?", szProfile);
+						if(MessageBox(hwndDlg, message, L"Confirm Save", MB_YESNO | MB_ICONEXCLAMATION) == IDNO)
 							bSave = false;
 					}
 
@@ -3501,11 +3580,11 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
               if(SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, WM_GETTEXT, cnProfileNameBufLen, (LPARAM)szProfile)) {
                 // see if the entered text even matches
                 if(SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_FINDSTRINGEXACT, 0, (LPARAM)szProfile) != CB_ERR) {
-                  char message[64 + cnProfileNameBufLen];
-                  wsprintf(message, "Are you sure you want to delete\n%s?", szProfile);
-                  if(MessageBox(hwndDlg, message, "Confirm Delete", MB_YESNO | MB_ICONEXCLAMATION) == IDYES) {
+					wchar_t message[64 + cnProfileNameBufLen] = {0};
+                  _snwprintf(message, ARRAYSIZE(message), L"Are you sure you want to delete\n%s?", szProfile);
+                  if(MessageBox(hwndDlg, message, L"Confirm Delete", MB_YESNO | MB_ICONEXCLAMATION) == IDYES) {
                     DeleteProfile(szProfile);
-					if(!lstrcmp(szProfile, cszCurrentSettings)) {
+					if(!wcscmp(szProfile, cszCurrentSettings)) {
 					  const char *cszMessage = "The Truth Is Out There";
 					  const char *cszCaption = "Believe";
 					  UINT uType = MB_ICONINFORMATION;
@@ -3521,7 +3600,7 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
 							uType = MB_YESNO | MB_ICONQUESTION;
 							break;
                       }
-                      MessageBox(hwndDlg, cszMessage, cszCaption, uType);
+                      MessageBoxA(hwndDlg, cszMessage, cszCaption, uType);
                     }
                     int index = (int)SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_FINDSTRING, 0, (LPARAM)szProfile);
                     SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_DELETESTRING, index, 0);
@@ -3555,8 +3634,6 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
 // propertysheet for selecting a profile
 BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	char szProfile[MAX_PATH];
-
 	switch(uMsg) {
     case WM_SHOWWINDOW:
 		if(!wParam)
@@ -3574,7 +3651,9 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
         case LBN_DBLCLK:
           switch(LOWORD(wParam)) {
             case IDC_PROFILELIST:
+			{
               // copies the selected (anchor item) text into select_profile
+			  wchar_t szProfile[MAX_PATH] = {0};
               if(SendDlgItemMessage(hwndDlg, IDC_PROFILELIST, LB_GETTEXT, SendDlgItemMessage(hwndDlg, IDC_PROFILELIST, LB_GETANCHORINDEX, 0, 0), (LPARAM)szProfile) != LB_ERR) {
                 LoadTempProfile(szProfile);
 				SetDlgItemText(hwndDlg, IDC_STATICMESSAGE, szProfileMessage[0] ? szProfileMessage : cszDefaultProfileMessage);
@@ -3582,6 +3661,7 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
                   //HandleFileError(e);
               }
               return TRUE;
+			}
             default: return FALSE;
           }
         default: return FALSE;
@@ -3627,43 +3707,31 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
 /*
 * file functions
 */
-
-// get the absolute path to this module (DLL) ending in backslash
-void GetModulePath(char *ini_file)
-{
-	GetModuleFileName(AtAnSt_Vis_mod.hDllInstance, ini_file, TEMP_STRING_LENGTH);
-	char *p = ini_file+strlen(ini_file);
-	while (p >= ini_file && *p != '\\') p--;
-	if (++p >= ini_file) *p = 0;
-}
-
 // makes an absolute path to the profile directory (not ending in backslash)
-void GetProfilePath(char *szBuf)
+void GetProfilePath(wchar_t *szBuf)
 {
-	GetModulePath(szBuf);
-	strcat(szBuf, cszProfileDirectory);
+	GetModuleFileName(AtAnSt_Vis_mod.hDllInstance, szBuf, MAX_PATH);
+	PathRemoveFileSpec(szBuf);
+	PathAppend(szBuf, cszProfileDirectory);
 }
 
 // makes an absolute path to a profile ini file
-void GetProfileINIFilename(char *szBuf, const char *cszProfile)
+void GetProfileINIFilename(wchar_t *szBuf, const wchar_t *cszProfile)
 {
+	if(!wcscmp(cszProfile, cszCurrentSettings)) {
+		wcsncpy(szBuf, szMainIniFilename, MAX_PATH);
+	}
+	else {
 	GetProfilePath(szBuf);
-	strcat(szBuf, "\\");
-	strcat(szBuf, cszProfile);
-	strcat(szBuf, cszProfileExtension);
+		PathAppend(szBuf, cszProfile);
+		PathAddExtension(szBuf, cszProfileExtension);
 }
-
-// makes an absolute path to the ini file
-void GetMainINIFilename(char *szBuf)
-{
-	GetModulePath(szBuf);
-	strcat(szBuf, cszIniFilename);
 }
 
 // create the profile directory (in case it doesn't exist)
 int CreateProfileDirectory(void)
 {
-	char szBuf[TEMP_STRING_LENGTH];
+	wchar_t szBuf[MAX_PATH] = {0};
 	GetProfilePath(szBuf);
 	int nErr = 0;
 	if(!CreateDirectory(szBuf, NULL)) {
@@ -3674,9 +3742,9 @@ int CreateProfileDirectory(void)
 	return nErr;
 }
 
-int FileExists(const char *cszFilename)
+int FileExists(const wchar_t *cszFilename)
 {
-	WIN32_FIND_DATA fd;
+	WIN32_FIND_DATA fd = {0};
 	HANDLE h = FindFirstFile(cszFilename, &fd);
 	if(h != INVALID_HANDLE_VALUE) {
 		FindClose(h);
@@ -3685,9 +3753,9 @@ int FileExists(const char *cszFilename)
 	return GetLastError();
 }
 
-void DeleteProfile(const char *cszProfile)
+void DeleteProfile(const wchar_t *cszProfile)
 {
-	char szBuf[MAX_PATH];
+	wchar_t szBuf[MAX_PATH] = {0};
 	GetProfileINIFilename(szBuf, cszProfile);
 	if(DeleteFile(szBuf)) {
 		// profile deleted, set the profile name to current settings
@@ -3697,21 +3765,21 @@ void DeleteProfile(const char *cszProfile)
 
 HANDLE FindProfileFiles(LPWIN32_FIND_DATA pfd)
 {
-	char szPath[TEMP_STRING_LENGTH];
+	wchar_t szPath[MAX_PATH] = {0};
 	GetProfilePath(szPath);
-	strcat(szPath, "\\*.ini");
+	wcsncat(szPath, L"\\*.ini", ARRAYSIZE(szPath));
 	return FindFirstFile(szPath, pfd);
 }
 
 void EnumProfilesToControl(HWND hDlg, int nIDDlgItem, UINT nMsg, UINT nSelMsg)
 {
-	WIN32_FIND_DATA fd;
+	WIN32_FIND_DATA fd = {0};
 	HANDLE hFind = FindProfileFiles(&fd);
 	if(hFind != INVALID_HANDLE_VALUE) {
 		do {
-			fd.cFileName[strlen(fd.cFileName) - 4] = 0;
+			fd.cFileName[wcslen(fd.cFileName) - 4] = 0;
 			int n = (int)SendDlgItemMessage(hDlg, nIDDlgItem, nMsg, 0, (LPARAM)fd.cFileName);
-			if(nSelMsg && !lstrcmp(fd.cFileName, szTempProfile))
+			if(nSelMsg && !_wcsicmp(fd.cFileName, szTempProfile))
 				SendDlgItemMessage(hDlg, nIDDlgItem, nSelMsg, n, 0);
 		} while(FindNextFile(hFind, &fd));
 		FindClose(hFind);
@@ -3721,37 +3789,37 @@ void EnumProfilesToControl(HWND hDlg, int nIDDlgItem, UINT nMsg, UINT nSelMsg)
 // get the next and previous profile names relative to the current profile
 // the previous and next will wrap to first/last
 // returns 0 on success, or GetLastError() value
-int GetRelativeProfiles(const char *szCurrent, char *szPrevious, char *szNext)
+int GetRelativeProfiles(const wchar_t *szCurrent, wchar_t *szPrevious, wchar_t *szNext)
 {
-	WIN32_FIND_DATA fd;
+	WIN32_FIND_DATA fd = {0};
 	HANDLE hFind = FindProfileFiles(&fd);
 	if(hFind != INVALID_HANDLE_VALUE) {
 		// init next and previous
 		if(szPrevious) *szPrevious = 0;
 		if(szNext) *szNext = 0;
 		// remove extension
-		fd.cFileName[strlen(fd.cFileName) - 4] = 0;
+		fd.cFileName[wcslen(fd.cFileName) - 4] = 0;
 		// setup first and last
-		char szFirst[MAX_PATH];
-		char szLast[MAX_PATH];
-		strcpy(szFirst, fd.cFileName);
-		strcpy(szLast, fd.cFileName);
+		wchar_t szFirst[MAX_PATH] = {0};
+		wchar_t szLast[MAX_PATH] = {0};
+		wcsncpy(szFirst, fd.cFileName, ARRAYSIZE(szFirst));
+		wcsncpy(szLast, fd.cFileName, ARRAYSIZE(szLast));
 		// need to check if the first file is valid for prev/next, so jump into the loop
 		goto skipFind;
 		while(FindNextFile(hFind, &fd)) {
 			// remove extension
-			fd.cFileName[strlen(fd.cFileName) - 4] = 0;
+			fd.cFileName[wcslen(fd.cFileName) - 4] = 0;
 			// check first/last
-			if(lstrcmp(fd.cFileName, szFirst) < 0) strcpy(szFirst, fd.cFileName);
-			if(lstrcmp(fd.cFileName, szLast) > 0) strcpy(szLast, fd.cFileName);
+			if(_wcsicmp(fd.cFileName, szFirst) < 0) wcsncpy(szFirst, fd.cFileName, ARRAYSIZE(szFirst));
+			if(_wcsicmp(fd.cFileName, szLast) > 0) wcsncpy(szLast, fd.cFileName, ARRAYSIZE(szLast));
 skipFind:	// check prev/next
-			if(szPrevious && (lstrcmp(fd.cFileName, szPrevious) > 0 || !(*szPrevious)) && lstrcmp(fd.cFileName, szCurrent) < 0) strcpy(szPrevious, fd.cFileName);
-			if(szNext && (lstrcmp(fd.cFileName, szNext) < 0 || !(*szNext)) && lstrcmp(fd.cFileName, szCurrent) > 0) strcpy(szNext, fd.cFileName);
+			if(szPrevious && (_wcsicmp(fd.cFileName, szPrevious) > 0 || !(*szPrevious)) && _wcsicmp(fd.cFileName, szCurrent) < 0) wcsncpy(szPrevious, fd.cFileName, MAX_PATH);
+			if(szNext && (_wcsicmp(fd.cFileName, szNext) < 0 || !(*szNext)) && _wcsicmp(fd.cFileName, szCurrent) > 0) wcsncpy(szNext, fd.cFileName, MAX_PATH);
 		}
 		FindClose(hFind);
 		// if current profile is first or last, then make prev/next wrap to first/last
-		if(szPrevious && !lstrcmp(szCurrent, szFirst)) strcpy(szPrevious, szLast);
-		if(szNext && !lstrcmp(szCurrent, szLast)) strcpy(szNext, szFirst);
+		if(szPrevious && !_wcsicmp(szCurrent, szFirst)) wcsncpy(szPrevious, szLast, MAX_PATH);
+		if(szNext && !_wcsicmp(szCurrent, szLast)) wcsncpy(szNext, szFirst, MAX_PATH);
 		return 0;
 	}
 	return GetLastError();
@@ -3760,7 +3828,7 @@ skipFind:	// check prev/next
 unsigned int CountProfileFiles(void)
 {
 	unsigned int nCount = 0;
-	WIN32_FIND_DATA fd;
+	WIN32_FIND_DATA fd = {0};
 	HANDLE hFind = FindProfileFiles(&fd);
 	if(hFind != INVALID_HANDLE_VALUE) {
 		nCount++;
@@ -3775,106 +3843,52 @@ unsigned int CountProfileFiles(void)
 * file loading functions
 */
 
-void LoadMainIniSettings(void)
-{
-	char szFilename[TEMP_STRING_LENGTH];
-	GetMainINIFilename(szFilename);
-	//AtAnSt_Vis_mod.latencyMs = ReadPrivateProfileInt(szFilename, cszIniMainSection, "Latency", 10, 0, 1000);
-	char buf[32 * 1024];
-	DWORD dwSize = 32 * 1024;
-	int error = ReadFileToBuffer(szFilename, buf, &dwSize);
-	if(!error) {
-		char *bufEnd = buf + dwSize - 1;
-		AtAnSt_Vis_mod.latencyMs = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "Latency", 10, 0, 1000);
-	}
-}
-
-int NewLoadProfileIni(const char *cszProfile)
-{
-	char szFilename[TEMP_STRING_LENGTH];
-	GetProfileINIFilename(szFilename, cszProfile);
-	int error = FileExists(szFilename);
-	if(error)
-		return error;
-	char buf[32 * 1024];
-	DWORD dwSize = 32 * 1024;
-	error = ReadFileToBuffer(szFilename, buf, &dwSize);
-	if(!error) {
-		char *bufEnd = buf + dwSize - 1;
-		falloffrate = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "Falloff", falloffrate, 0, 75);
-		peakchangerate = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "PeakChange", peakchangerate, 0, 255);
-		requested_band_width = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "Bar Width", requested_band_width, 1, 50);
-		x_spacing = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "X-Spacing", x_spacing, 0, 10);
-		y_spacing = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "Y-Spacing",y_spacing, 1, 7);
-		backgrounddraw = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "BackgroundDraw", backgrounddraw, BACKGROUND_MIN, BACKGROUND_MAX);
-		barcolourstyle = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "BarColourStyle", barcolourstyle, BAR_MIN, BAR_MAX);
-		peakcolourstyle = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "PeakColourStyle", peakcolourstyle, PEAK_MIN, PEAK_MAX);
-		effect = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "Effect", effect, EFFECT_MIN, EFFECT_MAX);
-		peakleveleffect = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "Peak Effect", peakleveleffect, PEAK_EFFECT_MIN, PEAK_EFFECT_MAX);
-		levelbase = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "Bar Level", levelbase, LEVEL_MIN, LEVEL_MAX);
-		reverseleft = ReadPrivateProfileBool(buf, bufEnd, cszIniMainSection, "ReverseLeft", reverseleft);
-		reverseright = ReadPrivateProfileBool(buf, bufEnd, cszIniMainSection, "ReverseRight", reverseright);
-		mono = ReadPrivateProfileBool(buf, bufEnd, cszIniMainSection, "Mono", mono);
-		bFftEqualize = ReadPrivateProfileBool(buf, bufEnd, cszIniMainSection, "FFTEqualize", bFftEqualize);
-		fFftEnvelope = ReadPrivateProfileFloat(buf, bufEnd, cszIniMainSection, "FFTEnvelope", fFftEnvelope);
-		fFftScale = ReadPrivateProfileFloat(buf, bufEnd, cszIniMainSection, "FFTScale", fFftScale);
-		szProfileMessage[0] = 0;
-		ReadPrivateProfileString(buf, bufEnd, cszIniMainSection, "Message", szProfileMessage, PROFILE_MESSAGE_STRING_LENGTH);
-		ReadPrivateProfileColourArray(buf, bufEnd, "BarColours", FreqBarColour, 256);
-		ReadPrivateProfileColourArray(buf, bufEnd, "PeakColours", PeakColour, 256);
-		ReadPrivateProfileColourArray(buf, bufEnd, "VolumeColours", VolumeColour, 256);
-		ReadPrivateProfileIntArray(buf, bufEnd, "VolumeFunction", volume_func, 256);
-	}
-	return 0;
-}
-
 // loads the given profile
 // returns 0 on success
-int LoadProfileIni(const char *cszProfile)
+int LoadProfileIni(const wchar_t *cszProfile)
 {
-	LoadMainIniSettings();
-	char szFilename[TEMP_STRING_LENGTH];
+	AtAnSt_Vis_mod.latencyMs = ReadPrivateProfileInt(cszIniMainSection, L"Latency", 10, 0, 1000, szMainIniFilename);
+
+	wchar_t szFilename[MAX_PATH] = {0};
 	GetProfileINIFilename(szFilename, cszProfile);
 	int error = FileExists(szFilename);
 	if(error)
 		return error;
-	//DWORD dwTicks = GetTickCount();
-	/*falloffrate = ReadPrivateProfileInt(szFilename, cszIniMainSection, "Falloff", 12, 0, 75);
-	peakchangerate = ReadPrivateProfileInt(szFilename, cszIniMainSection, "PeakChange", 80, 0, 255);
-	requested_band_width = ReadPrivateProfileInt(szFilename, cszIniMainSection, "Bar Width", 3, 1, 50);
-	x_spacing = ReadPrivateProfileInt(szFilename, cszIniMainSection, "X-Spacing", 1, 0, 10);
-	y_spacing = ReadPrivateProfileInt(szFilename, cszIniMainSection, "Y-Spacing", 2, 1, 7);
-	backgrounddraw = ReadPrivateProfileInt(szFilename, cszIniMainSection, "BackgroundDraw", BACKGROUND_BLACK, BACKGROUND_MIN, BACKGROUND_MAX);
-	barcolourstyle = ReadPrivateProfileInt(szFilename, cszIniMainSection, "BarColourStyle", BAR_FIRE, BAR_MIN, BAR_MAX);
-	peakcolourstyle = ReadPrivateProfileInt(szFilename, cszIniMainSection, "PeakColourStyle", PEAK_FADE, PEAK_MIN, PEAK_MAX);
-	effect = ReadPrivateProfileInt(szFilename, cszIniMainSection, "Effect", EFFECT_NONE, EFFECT_MIN, EFFECT_MAX);
-	peakleveleffect = ReadPrivateProfileInt(szFilename, cszIniMainSection, "Peak Effect", PEAK_EFFECT_NORMAL, PEAK_EFFECT_MIN, PEAK_EFFECT_MAX);
-	levelbase = ReadPrivateProfileInt(szFilename, cszIniMainSection, "Bar Level", LEVEL_AVERAGE, LEVEL_MIN, LEVEL_MAX);
-	reverseleft = ReadPrivateProfileBool(szFilename, cszIniMainSection, "ReverseLeft", true);
-	reverseright = ReadPrivateProfileBool(szFilename, cszIniMainSection, "ReverseRight", false);
-	mono = ReadPrivateProfileBool(szFilename, cszIniMainSection, "Mono", true);
-	bFftEqualize = ReadPrivateProfileBool(szFilename, cszIniMainSection, "FFTEqualize", true);
-	fFftEnvelope = ReadPrivateProfileFloat(szFilename, cszIniMainSection, "FFTEnvelope", 0.2f);
-	fFftScale = ReadPrivateProfileFloat(szFilename, cszIniMainSection, "FFTScale", 2.0f);
-	ReadPrivateProfileColourArray(szFilename, "BarColours", FreqBarColour, 256);
-	ReadPrivateProfileColourArray(szFilename, "PeakColours", PeakColour, 256);
-	ReadPrivateProfileColourArray(szFilename, "VolumeColours", VolumeColour, 256);
-	ReadPrivateProfileIntArray(szFilename, "VolumeFunction", volume_func, 256);*/
-	NewLoadProfileIni(cszProfile);
-	//dwTicks = GetTickCount() - dwTicks;
-	//MessageBox(hatan, itoa(dwTicks, szFilename, 10), "time", MB_OK);
+
+	falloffrate = ReadPrivateProfileInt(cszIniMainSection, L"Falloff", falloffrate, 0, 75, szFilename);
+	peakchangerate = ReadPrivateProfileInt(cszIniMainSection, L"PeakChange", peakchangerate, 0, 255, szFilename);
+	requested_band_width = ReadPrivateProfileInt(cszIniMainSection, L"Bar Width", requested_band_width, 1, 50, szFilename);
+	x_spacing = ReadPrivateProfileInt(cszIniMainSection, L"X-Spacing", x_spacing, 0, 10, szFilename);
+	y_spacing = ReadPrivateProfileInt(cszIniMainSection, L"Y-Spacing",y_spacing, 1, 7, szFilename);
+	backgrounddraw = ReadPrivateProfileInt(cszIniMainSection, L"BackgroundDraw", backgrounddraw, BACKGROUND_MIN, BACKGROUND_MAX, szFilename);
+	barcolourstyle = ReadPrivateProfileInt(cszIniMainSection, L"BarColourStyle", barcolourstyle, BAR_MIN, BAR_MAX, szFilename);
+	peakcolourstyle = ReadPrivateProfileInt(cszIniMainSection, L"PeakColourStyle", peakcolourstyle, PEAK_MIN, PEAK_MAX, szFilename);
+	effect = ReadPrivateProfileInt(cszIniMainSection, L"Effect", effect, EFFECT_MIN, EFFECT_MAX, szFilename);
+	peakleveleffect = ReadPrivateProfileInt(cszIniMainSection, L"Peak Effect", peakleveleffect, PEAK_EFFECT_MIN, PEAK_EFFECT_MAX, szFilename);
+	levelbase = ReadPrivateProfileInt(cszIniMainSection, L"Bar Level", levelbase, LEVEL_MIN, LEVEL_MAX, szFilename);
+	reverseleft = ReadPrivateProfileBool(cszIniMainSection, L"ReverseLeft", reverseleft, szFilename);
+	reverseright = ReadPrivateProfileBool(cszIniMainSection, L"ReverseRight", reverseright, szFilename);
+	mono = ReadPrivateProfileBool(cszIniMainSection, L"Mono", mono, szFilename);
+	bFftEqualize = ReadPrivateProfileBool(cszIniMainSection, L"FFTEqualize", bFftEqualize, szFilename);
+	fFftEnvelope = ReadPrivateProfileFloat(cszIniMainSection, L"FFTEnvelope", fFftEnvelope, szFilename);
+	fFftScale = ReadPrivateProfileFloat(cszIniMainSection, L"FFTScale", fFftScale, szFilename);
+		szProfileMessage[0] = 0;
+	GetPrivateProfileString(cszIniMainSection, L"Message", szProfileMessage, szProfileMessage, PROFILE_MESSAGE_STRING_LENGTH, szFilename);
+	ReadPrivateProfileColourArray(L"BarColours", FreqBarColour, 256, szFilename);
+	ReadPrivateProfileColourArray(L"PeakColours", PeakColour, 256, szFilename);
+	ReadPrivateProfileColourArray(L"VolumeColours", VolumeColour, 256, szFilename);
+	ReadPrivateProfileIntArray(L"VolumeFunction", volume_func, 256, szFilename);
 	return 0;
 }
 
 // load a profile, if successful then update current settings
 // returns 0 on success
-int LoadProfile(const char *cszProfile)
+int LoadProfile(const wchar_t *cszProfile)
 {
 	int e = LoadProfileIni(cszProfile);
 	if(!e) {
 		// profile loaded, update the entry and current settings
 		SaveProfileNameEntry(cszProfile);
-		//SaveCurrentSettings();
 		CalculateAndUpdate();
 	}
 	return e;
@@ -3882,11 +3896,11 @@ int LoadProfile(const char *cszProfile)
 
 // load temporary profile, current settings not updated
 // returns 0 on success
-int LoadTempProfile(const char *cszProfile)
+int LoadTempProfile(const wchar_t *cszProfile)
 {
 	int e = LoadProfileIni(cszProfile);
 	if(!e) {
-		strcpy(szTempProfile, cszProfile);
+		wcsncpy(szTempProfile, cszProfile, ARRAYSIZE(szTempProfile));
 		CalculateAndUpdate();
 	}
 	return e;
@@ -3897,14 +3911,12 @@ int LoadCurrentProfile(void)
 {
 	int error = 1;
 	// get profile name
-	char szFilename[TEMP_STRING_LENGTH];
-	GetMainINIFilename(szFilename);
-	int nProfileLen = GetPrivateProfileString(cszIniMainSection, "Profile", "", szCurrentProfile, TEMP_STRING_LENGTH, szFilename);
+	int nProfileLen = GetPrivateProfileString(cszIniMainSection, L"Profile", cszDefaultSettingsName, szCurrentProfile, MAX_PATH, szMainIniFilename);
 	// try to load the profile
 	if(nProfileLen > 0) {
 		error = LoadProfileIni(szCurrentProfile);
 		if(!error) {
-			strcpy(szTempProfile, szCurrentProfile);
+			wcsncpy(szTempProfile, szCurrentProfile, ARRAYSIZE(szTempProfile));
 			CalculateAndUpdate();
 		}
 	}
@@ -3912,6 +3924,10 @@ int LoadCurrentProfile(void)
 	// if error, try current settings
 	if(error)
 		error = LoadProfile(cszCurrentSettings);
+	
+	// if error, try current settings
+	if(error)
+		error = LoadProfile(cszDefaultSettingsName);
 	
 	// if error, load the first profile
 	if(error)
@@ -3932,9 +3948,9 @@ int LoadCurrentProfileOrCreateDefault(void)
 
 void LoadNextProfile(void)
 {
-	char szProfile[MAX_PATH];
+	wchar_t szProfile[MAX_PATH] = {0};
 	if(!GetRelativeProfiles(szCurrentProfile, NULL, szProfile)) {
-		//if(!lstrcmp(szProfile, cszCurrentSettings))
+		//if(!strcmpi(szProfile, cszCurrentSettings))
 			//GetRelativeProfiles(cszCurrentSettings, NULL, szProfile);
 		LoadProfile(szProfile);
 	}
@@ -3942,9 +3958,9 @@ void LoadNextProfile(void)
 
 void LoadPreviousProfile(void)
 {
-	char szProfile[MAX_PATH];
+	wchar_t szProfile[MAX_PATH] = {0};
 	if(!GetRelativeProfiles(szCurrentProfile, szProfile, NULL)) {
-		//if(!lstrcmp(szProfile, cszCurrentSettings))
+		//if(!strcmpi(szProfile, cszCurrentSettings))
 			//GetRelativeProfiles(cszCurrentSettings, szProfile, NULL);
 		LoadProfile(szProfile);
 	}
@@ -3954,10 +3970,10 @@ void LoadPreviousProfile(void)
 int LoadProfileNumber(unsigned int nProfileNumber)
 {
 	int e = 1;
-	unsigned int nCount = 0;
-	WIN32_FIND_DATA fd;
+	WIN32_FIND_DATA fd = {0};
 	HANDLE hFind = FindProfileFiles(&fd);
 	if(hFind != INVALID_HANDLE_VALUE) {
+		unsigned int nCount = 0;
 		while(nCount != nProfileNumber) {
 			if(FindNextFile(hFind, &fd))
 				nCount++;
@@ -3967,7 +3983,7 @@ int LoadProfileNumber(unsigned int nProfileNumber)
 		FindClose(hFind);
 		_ASSERT(nCount == nProfileNumber);
 		if(nCount == nProfileNumber) {
-			fd.cFileName[strlen(fd.cFileName) - 4] = 0;
+			fd.cFileName[wcslen(fd.cFileName) - 4] = 0;
 			e = LoadProfile(fd.cFileName);
 		}
 	} else
@@ -3977,37 +3993,20 @@ int LoadProfileNumber(unsigned int nProfileNumber)
 
 void LoadUserColours(void)
 {
-	char szFilename[TEMP_STRING_LENGTH];
-	GetMainINIFilename(szFilename);
-	char buf[32 * 1024];
-	DWORD dwSize = 32 * 1024;
-	int error = ReadFileToBuffer(szFilename, buf, &dwSize);
-	if(!error) {
-		char *bufEnd = buf + dwSize - 1;
-		ReadPrivateProfileColourArray(buf, bufEnd, "UserColours", UserColours, 16);
-	}
-	//ReadPrivateProfileColourArray(szFilename, "UserColours", UserColours, 16);
+	ReadPrivateProfileColourArray(L"UserColours", UserColours, 16, szMainIniFilename);
 }
 
 void LoadWindowPostion(RECT *pr)
 {
-	char szFilename[TEMP_STRING_LENGTH];
-	GetMainINIFilename(szFilename);
-	char buf[32 * 1024];
-	DWORD dwSize = 32 * 1024;
-	int error = ReadFileToBuffer(szFilename, buf, &dwSize);
-	if(!error) {
-		char *bufEnd = buf + dwSize - 1;
-		pr->left = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "WindowPosLeft", pr->left, 0, 65000);
-		pr->right = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "WindowPosRight", pr->right, 0, 65000);
-		pr->top = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "WindowPosTop", pr->top, 0, 65000);
-		pr->bottom = ReadPrivateProfileInt(buf, bufEnd, cszIniMainSection, "WindowPosBottom", pr->bottom, 0, 65000);
+	pr->left = GetPrivateProfileInt(cszIniMainSection, L"WindowPosLeft", pr->left, szMainIniFilename);
+	pr->right = GetPrivateProfileInt(cszIniMainSection, L"WindowPosRight", pr->right, szMainIniFilename);
+	pr->top = GetPrivateProfileInt(cszIniMainSection, L"WindowPosTop", pr->top, szMainIniFilename);
+	pr->bottom = GetPrivateProfileInt(cszIniMainSection, L"WindowPosBottom", pr->bottom, szMainIniFilename);
 
 		// make sure the window is not off screen
 		ValidateRectPosition(GetSystemMetrics(SM_CXSCREEN), &pr->left, &pr->right);
 		ValidateRectPosition(GetSystemMetrics(SM_CYSCREEN), &pr->top, &pr->bottom);
 	}
-}
 
 /*
 * file saving functions
@@ -4015,75 +4014,46 @@ void LoadWindowPostion(RECT *pr)
 
 void SaveMainIniSettings(void)
 {
-	char szFilename[TEMP_STRING_LENGTH];
-	GetMainINIFilename(szFilename);
-	WritePrivateProfileInt(cszIniMainSection, "Latency", AtAnSt_Vis_mod.latencyMs, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"Latency", AtAnSt_Vis_mod.latencyMs, szMainIniFilename);
 }
 
-int SaveProfileIni(const char *cszProfile)
+int SaveProfileIni(const wchar_t *cszProfile)
 {
-	//DWORD dwTicks = GetTickCount();
 	SaveMainIniSettings();
 	if(!CreateProfileDirectory()) {
-		char szFilename[TEMP_STRING_LENGTH];
+		wchar_t szFilename[MAX_PATH] = {0};
 		GetProfileINIFilename(szFilename, cszProfile);
-		WritePrivateProfileInt(cszIniMainSection, "Falloff", falloffrate, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "PeakChange", peakchangerate, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "Bar Width", requested_band_width, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "X-Spacing", x_spacing, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "Y-Spacing", y_spacing, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "BackgroundDraw", backgrounddraw, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "BarColourStyle", barcolourstyle, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "PeakColourStyle", peakcolourstyle, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "Effect", effect, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "Peak Effect", peakleveleffect, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, "Bar Level", levelbase, szFilename);
-		WritePrivateProfileBool(cszIniMainSection, "ReverseLeft", reverseleft, szFilename);
-		WritePrivateProfileBool(cszIniMainSection, "ReverseRight", reverseright, szFilename);
-		WritePrivateProfileBool(cszIniMainSection, "Mono", mono, szFilename);
-		WritePrivateProfileBool(cszIniMainSection, "FFTEqualize", bFftEqualize, szFilename);
-		WritePrivateProfileFloat(cszIniMainSection, "FFTEnvelope", fFftEnvelope, szFilename);
-		WritePrivateProfileFloat(cszIniMainSection, "FFTScale", fFftScale, szFilename);
-		WritePrivateProfileColourArray("BarColours", FreqBarColour, 256, szFilename);
-		WritePrivateProfileColourArray("PeakColours", PeakColour, 256, szFilename);
-		WritePrivateProfileColourArray("VolumeColours", VolumeColour, 256, szFilename);
-		WritePrivateProfileIntArray("VolumeFunction", volume_func, 256, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"Falloff", falloffrate, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"PeakChange", peakchangerate, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"Bar Width", requested_band_width, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"X-Spacing", x_spacing, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"Y-Spacing", y_spacing, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"BackgroundDraw", backgrounddraw, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"BarColourStyle", barcolourstyle, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"PeakColourStyle", peakcolourstyle, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"Effect", effect, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"Peak Effect", peakleveleffect, szFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"Bar Level", levelbase, szFilename);
+		WritePrivateProfileBool(cszIniMainSection, L"ReverseLeft", reverseleft, szFilename);
+		WritePrivateProfileBool(cszIniMainSection, L"ReverseRight", reverseright, szFilename);
+		WritePrivateProfileBool(cszIniMainSection, L"Mono", mono, szFilename);
+		WritePrivateProfileBool(cszIniMainSection, L"FFTEqualize", bFftEqualize, szFilename);
+		WritePrivateProfileFloat(cszIniMainSection, L"FFTEnvelope", fFftEnvelope, szFilename);
+		WritePrivateProfileFloat(cszIniMainSection, L"FFTScale", fFftScale, szFilename);
+		WritePrivateProfileColourArray(L"BarColours", FreqBarColour, 256, szFilename);
+		WritePrivateProfileColourArray(L"PeakColours", PeakColour, 256, szFilename);
+		WritePrivateProfileColourArray(L"VolumeColours", VolumeColour, 256, szFilename);
+		WritePrivateProfileIntArray(L"VolumeFunction", volume_func, 256, szFilename);
 	}
-	//dwTicks = GetTickCount() - dwTicks;
 	return 0;
 }
 
 // update the last profile
-void SaveProfileNameEntry(const char *cszProfile)
+void SaveProfileNameEntry(const wchar_t *cszProfile)
 {
-	char szFilename[TEMP_STRING_LENGTH];
-	GetMainINIFilename(szFilename);
-	WritePrivateProfileString(cszIniMainSection, "Profile", cszProfile, szFilename);
-	strcpy(szCurrentProfile, cszProfile);
-	strcpy(szTempProfile, cszProfile);
-}
-
-void SaveUserColours(void)
-{
-	char szFilename[TEMP_STRING_LENGTH];
-	GetMainINIFilename(szFilename);
-	WritePrivateProfileColourArray("UserColours", UserColours, 16, szFilename);
-}
-
-void SaveWindowPostion(RECT *pr)
-{
-	char szFilename[TEMP_STRING_LENGTH];
-	GetMainINIFilename(szFilename);
-	WritePrivateProfileInt(cszIniMainSection, "WindowPosLeft", pr->left, szFilename);
-	WritePrivateProfileInt(cszIniMainSection, "WindowPosRight", pr->right, szFilename);
-	WritePrivateProfileInt(cszIniMainSection, "WindowPosTop", pr->top, szFilename);
-	WritePrivateProfileInt(cszIniMainSection, "WindowPosBottom", pr->bottom, szFilename);
-}
-
-// save "Current Settings" file
-int SaveCurrentSettings(void)
-{
-	return SaveProfileIni(cszCurrentSettings);
+	WritePrivateProfileString(cszIniMainSection, L"Profile", cszProfile, szMainIniFilename);
+	wcsncpy(szCurrentProfile, cszProfile, ARRAYSIZE(szCurrentProfile));
+	wcsncpy(szTempProfile, cszProfile, ARRAYSIZE(szTempProfile));
 }
 
 // save "Current Settings" file
@@ -4091,11 +4061,11 @@ int SaveTempCurrentSettings(void)
 {
 	//SaveProfileNameEntry(szTempProfile);
 	SaveProfileNameEntry(cszCurrentSettings);
-	return SaveCurrentSettings();
+	return SaveProfileIni(cszCurrentSettings);
 }
 
 // save a profile and update the profile entry
-int SaveProfile(const char *cszProfile)
+int SaveProfile(const wchar_t *cszProfile)
 {
 	int e = SaveProfileIni(cszProfile);
 	if(!e)
@@ -4272,37 +4242,20 @@ void ValidateRectPosition(int nMax, LONG *pnLeft, LONG *pnRight)
 	}
 }
 
-void DecryptText(char *szBuf, int nLen)
-{
-	for(int i = 0; i < nLen; i++, szBuf++)
-		*szBuf ^= m_rand.next() & 0xff;
-}
-
-#ifdef _DEBUG
-void MakeEncryptMessage(const char *szMsg, char *szBuf)
-{
-	while(*szMsg) {
-		int n = wsprintf(szBuf, "0x%02x,", (unsigned int)*szMsg ^ (unsigned int)(m_rand.next() & 0xff));
-		szBuf += n;
-		szMsg++;
-	}
-}
-
 void AboutMessage(void)
 {
-	m_rand.seed(TEXT_ENCRYPT_KEY);
-	char szMsg[1024];
-	MakeEncryptMessage(cszAboutCaption, szMsg);
-	MessageBox(hatan, szMsg, "debug caption", MB_ICONINFORMATION);
-	MakeEncryptMessage(cszAboutText, szMsg);
-	MessageBox(hatan, szMsg, "debug text", MB_ICONINFORMATION);
-}
+#ifdef WACUP_BUILD
+	// TODO localise
+	wchar_t message[1024] = {0};
+	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer plug-in originally "
+			   L"by Mike Lynch (Copyright © 2007-2018)\n\nUpdated by Darren Owen aka DrO for "
+			   L"WACUP\nhttps://github.com/WACUP/vis_classic\n\nBuild date: %s", TEXT(__DATE__));
+	AboutMessageBox(hatan, message, L"Classic Spectrum Analyzer");
 #else
-void AboutMessage(void)
-{
-	MessageBox(hatan, szAboutText, szAboutCaption, MB_ICONINFORMATION);
-}
+	MessageBox(hatan, L"Classic Spectrum Analyzer\n\nCopyright © 2007 Mike Lynch\n\n"
+			   L"mlynch@gmail.com", L"Classic Spectrum Analyzer", MB_ICONINFORMATION);
 #endif
+}
 
 // pop up a messagebox to try and explain the error
 /*void HandleFileError(int error)

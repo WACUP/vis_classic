@@ -4,7 +4,7 @@
 // Feel free to base any plugins on this "framework"...
 
 #include <windows.h>
-#include "..\winamp\vis\vis.h"
+#include <Winamp/vis.h>
 #include "vis_satan.h"
 
 // "member" functions

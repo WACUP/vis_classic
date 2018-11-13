@@ -33,7 +33,6 @@ public:
     int  GetNumFreq() { return NFREQ; };
     void CleanUp();
 private:
-    int m_ready;
     int m_samples_in;
     int NFREQ;
 

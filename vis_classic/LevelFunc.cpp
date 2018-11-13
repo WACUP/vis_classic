@@ -1,5 +1,7 @@
 #include <math.h>
 
+// TODO try to use log1p on compatible VS builds
+
 void LinearTable(int *table)
 {
   for(int i = 0; i < 256; i++)
