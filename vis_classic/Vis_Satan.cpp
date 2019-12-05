@@ -401,7 +401,7 @@ int AtAnStInit(winampVisModule *this_mod)
 
 	// makes an absolute path to the ini file
 #ifdef WACUP_BUILD
-	PathCombine(szMainIniFilename, get_paths()->settings_dir, cszIniFilename);
+	PathCombine(szMainIniFilename, GetPaths()->settings_dir, cszIniFilename);
 #else
 	PathCombine(szMainIniFilename, (wchar_t*)SendMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_GETINIDIRECTORYW), cszIniFilename);
 #endif

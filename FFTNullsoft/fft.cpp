@@ -112,7 +112,7 @@ void FFT::InitEqualizeTable()
 	float bias = 0.04f;
 	for(int i = 0; i < NFREQ / 2; i++) {
 		float inv_half_nfreq = (9.0f - bias) / (float)(NFREQ / 2);
-		equalize[i] = log10(1.0f + bias + (float)(i + 1) * inv_half_nfreq);
+		equalize[i] = log10f(1.0f + bias + (float)(i + 1) * inv_half_nfreq);
 		//if(bias > 0.0001f)
 			bias /= 1.0025f;
 	}

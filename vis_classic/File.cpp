@@ -10,46 +10,46 @@
 // Win32 INI file write functions
 //
 
-int WritePrivateProfileBool(const wchar_t *cszSection, const wchar_t *cszKey, bool bValue, const wchar_t *cszFilename)
+void WritePrivateProfileBool(const wchar_t *cszSection, const wchar_t *cszKey, bool bValue, const wchar_t *cszFilename)
 {
-	return WritePrivateProfileString(cszSection, cszKey, bValue ? L"1" : L"0", cszFilename) ? 0 : 1;
+	WritePrivateProfileString(cszSection, cszKey, bValue ? L"1" : L"0", cszFilename) ? 0 : 1;
 }
 
-int WritePrivateProfileFloat(const wchar_t *cszSection, const wchar_t *cszKey, float fValue, const wchar_t *cszFilename)
+void WritePrivateProfileFloat(const wchar_t *cszSection, const wchar_t *cszKey, float fValue, const wchar_t *cszFilename)
 {
-	int n = (int)(fValue * 100.00001);
-	return WritePrivateProfileInt(cszSection, cszKey, n, cszFilename) ? 0 : 1;
+	const int n = (int)(fValue * 100.00001);
+	WritePrivateProfileInt(cszSection, cszKey, n, cszFilename);
 }
 
-int WritePrivateProfileInt(const wchar_t *cszSection, const wchar_t *cszKey, int nValue, const wchar_t *cszFilename)
+void WritePrivateProfileInt(const wchar_t *cszSection, const wchar_t *cszKey, int nValue, const wchar_t *cszFilename)
 {
 	wchar_t szTemp[TEMP_STRING_LENGTH] = {0};
-	return WritePrivateProfileString(cszSection, cszKey, _itow(nValue, szTemp, 10), cszFilename) ? 0 : 1;
+	WritePrivateProfileString(cszSection, cszKey, _itow(nValue, szTemp, 10), cszFilename) ? 0 : 1;
 }
 
-int WritePrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsigned int nSize, const wchar_t *cszFilename)
+void WritePrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsigned int nSize, const wchar_t *cszFilename)
 {
-	int e = 0;
 	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
 	for(unsigned int i = 0; i < nSize; i++)
-		e |= WritePrivateProfileInt(cszSection, _itow(i, szKey, 10), pnValues[i], cszFilename);
-	return e;
+	{
+		WritePrivateProfileInt(cszSection, _itow(i, szKey, 10), pnValues[i], cszFilename);
+	}
 }
 
-int WritePrivateProfileColour(const wchar_t *cszSection, const wchar_t *cszKey, COLORREF crValue, const wchar_t *cszFilename)
+void WritePrivateProfileColour(const wchar_t *cszSection, const wchar_t *cszKey, COLORREF crValue, const wchar_t *cszFilename)
 {
 	wchar_t szTemp[TEMP_STRING_LENGTH] = {0};
 	_snwprintf(szTemp, ARRAYSIZE(szTemp), L"%d %d %d", (int)GetBValue(crValue), (int)GetGValue(crValue), (int)GetRValue(crValue));
-	return WritePrivateProfileString(cszSection, cszKey, szTemp, cszFilename) ? 0 : 1;
+	WritePrivateProfileString(cszSection, cszKey, szTemp, cszFilename) ? 0 : 1;
 }
 
-int WritePrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValues, unsigned int nSize, const wchar_t *cszFilename)
+void WritePrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValues, unsigned int nSize, const wchar_t *cszFilename)
 {
-	int e = 0;
 	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
 	for(unsigned int i = 0; i < nSize; i++)
-		e |= WritePrivateProfileColour(cszSection, _itow(i, szKey, 10), pcrValues[i], cszFilename);
-	return e;
+	{
+		WritePrivateProfileColour(cszSection, _itow(i, szKey, 10), pcrValues[i], cszFilename);
+	}
 }
 
 //

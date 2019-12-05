@@ -48,10 +48,6 @@ __declspec( dllexport ) winampVisHeader *winampVisGetHeader(HWND hwndParent)
 
 			// need to have this initialised before we try to do anything with localisation features
 			WASABI_API_START_LANG(GetMyInstance(), VisCSAGUID);
-
-			// as we're under a different thread we need to set the locale
-			//WASABI_API_LNG->UseUserNumericLocale();
-			//g_use_C_locale = WASABI_API_LNG->Get_C_NumericLocale();
 		}
 	}
 	return &hdr;

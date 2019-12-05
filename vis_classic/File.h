@@ -1,10 +1,10 @@
 // Win32 INI file write functions
-int WritePrivateProfileBool(const wchar_t *cszSection, const wchar_t *cszKey, bool bValue, const wchar_t *cszFilename);
-int WritePrivateProfileFloat(const wchar_t *cszSection, const wchar_t *cszKey, float fValue, const wchar_t *cszFilename);
-int WritePrivateProfileInt(const wchar_t *cszSection, const wchar_t *cszKey, int nValue, const wchar_t *cszFilename);
-int WritePrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsigned int nSize, const wchar_t *cszFilename);
-int WritePrivateProfileColour(const wchar_t *cszSection, const char *cszKey, COLORREF crValue, const wchar_t *cszFilename);
-int WritePrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValues, unsigned int nSize, const wchar_t *cszFilename);
+void WritePrivateProfileBool(const wchar_t *cszSection, const wchar_t *cszKey, bool bValue, const wchar_t *cszFilename);
+void WritePrivateProfileFloat(const wchar_t *cszSection, const wchar_t *cszKey, float fValue, const wchar_t *cszFilename);
+void WritePrivateProfileInt(const wchar_t *cszSection, const wchar_t *cszKey, int nValue, const wchar_t *cszFilename);
+void WritePrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsigned int nSize, const wchar_t *cszFilename);
+void WritePrivateProfileColour(const wchar_t *cszSection, const char *cszKey, COLORREF crValue, const wchar_t *cszFilename);
+void WritePrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValues, unsigned int nSize, const wchar_t *cszFilename);
 
 // Win32 INI file read functions
 int ReadFileToBuffer(const wchar_t *cszFilename, wchar_t *cBuf, DWORD *pdwBufLen);
