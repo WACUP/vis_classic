@@ -1,4 +1,4 @@
-#define PLUGIN_VERSION " v2.0.3"
+#define PLUGIN_VERSION " v2.0.5"
 #define CS_MODULE_TITLE "Classic Spectrum Analyzer" PLUGIN_VERSION
 
 void FFTInit(unsigned int nNewFft);
@@ -78,7 +78,6 @@ void CreateRandomRamp(COLORREF *);
 void UpdateColourLookup();
 void UpdatePeakColourLookup();
 void RandomColourLookup();
-void UpdateAllColours(void);
 void CalculateAndUpdate(void);
 
 // File functions

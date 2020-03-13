@@ -172,7 +172,6 @@ static const GUID embed_guid =
 
 const wchar_t *cszClassName = L"ClassicSpectrum";
 const wchar_t *cszIniMainSection = L"Classic Analyzer";
-const wchar_t *cszProfileDirectory = L"vis_classic";
 const wchar_t *cszIniFilename = L"Plugins\\vis_classic.ini";
 const wchar_t *cszCurrentSettings = L"Current Settings";
 #ifdef WACUP_BUILD
@@ -180,7 +179,6 @@ const wchar_t *cszDefaultSettingsName = L"Classic";
 #else
 const wchar_t *cszDefaultSettingsName = L"Default Red & Yellow";
 #endif
-const wchar_t *cszProfileExtension = L".ini";
 const wchar_t *cszDefaultProfileMessage = L"Click on a profile to load it (any changes not saved will be "
 										  L"lost).\nClick OK to save the Current Settings.\nClick Cancel "\
 										  L"to re-load the Current Settings (any changes will be discarded).";
@@ -487,7 +485,7 @@ int AtAnStInit(winampVisModule *this_mod)
 				m_rand.seed(GetTickCount());
 
 				// show the window
-				ShowWindow(parent, SW_SHOWNORMAL);
+				ShowWindow(parent, SW_SHOWNA);
 				return 0;
 			}
 		}
@@ -912,9 +910,14 @@ void CalculateVariablesStereo()
 	draw_width = win_width;
 	if(draw_width > image_width)
 		draw_width = image_width;
+	if (draw_width <= 0)
+		return;
+
 	draw_height = win_height;
 	if(draw_height > MAX_WIN_HEIGHT)
 		draw_height = MAX_WIN_HEIGHT;
+	if (draw_height <= 0)
+		return;
 
 	band_width = requested_band_width;  // bar width
 	total_width = band_width + x_spacing;  // this is commonly used
@@ -986,8 +989,9 @@ void CalculateVariablesStereo()
 	CalculateCommonVariables();
 }
 
-void UpdateAllColours(void)
+void CalculateAndUpdate(void)
 {
+	CalculateVariables();
 	UpdateColourLookup();
 	UpdatePeakColourLookup();
 	EraseWindow();
@@ -995,12 +999,6 @@ void UpdateAllColours(void)
 	BackgroundDraw(0);
 	if(IsWindow(hatan))
 		InvalidateRect(hatan, NULL, FALSE);
-}
-
-void CalculateAndUpdate(void)
-{
-	CalculateVariables();
-	UpdateAllColours();
 }
 
 void UpdateColourLookup()
@@ -2049,7 +2047,7 @@ void RenderWideBarsSmoke()
   if(--movesmoke < band_width) {
     //for(int i = bands - 1; i > 0; i--)
       //levelbuffer[1][i] = levelbuffer[1][i - 1];
-    for(int i = smokebars - 1; i > 0; i--)
+    for(i = smokebars - 1; i > 0; i--)
       levelbuffer[1][i] = levelbuffer[1][i - 1];
     levelbuffer[1][0] = 0;
     //movesmoke = total_width;
@@ -2083,7 +2081,7 @@ void RenderWideBarsSmoke()
     }
   }
 
-  for(int i = 0; i < bands; i++) {
+  for(i = 0; i < bands; i++) {
     x = i * total_width;
     x_stop = i * total_width + band_width;
 
@@ -2105,10 +2103,10 @@ void RenderWideBarsSmoke()
 
 void PeakLevelNormal()
 {
-  for(int level = 1; level < 256; level++) {
-    peak_level_length[level] = (short)peakchangerate;
+  for(int _level = 1; _level < 256; _level++) {
+    peak_level_length[_level] = (short)peakchangerate;
     for(int i = 0; i <= peakchangerate; i++)
-      peak_level_lookup[level][i] = (short)level;
+      peak_level_lookup[_level][i] = (short)_level;
   }
 }
 
@@ -2117,19 +2115,19 @@ void PeakLevelFall()
 {
   int level_dur, fall_speed = 5;
 
-  for(int level = 1; level < 256; level++) {
+  for(int _level = 1; _level < 256; _level++) {
     if(peakchangerate < 256 - 255 / fall_speed)
       level_dur = peakchangerate;
     else
-      level_dur = 255 - level / fall_speed;
+      level_dur = 255 - _level / fall_speed;
 
-    peak_level_length[level] = (short)(level_dur + level / fall_speed);
+    peak_level_length[_level] = (short)(level_dur + _level / fall_speed);
 
     for(int i = 0; i <= level_dur; i++)
-      peak_level_lookup[level][peak_level_length[level] - i] = (short)level;
+      peak_level_lookup[_level][peak_level_length[_level] - i] = (short)_level;
 
-    for(int i = level_dur + 1, y = level - fall_speed; i <= peak_level_length[level]; i++, y -= fall_speed)
-      peak_level_lookup[level][peak_level_length[level] - i] = (short)y;
+    for(int i = level_dur + 1, y = _level - fall_speed; i <= peak_level_length[_level]; i++, y -= fall_speed)
+      peak_level_lookup[_level][peak_level_length[_level] - i] = (short)y;
   }
 }
 
@@ -2138,19 +2136,19 @@ void PeakLevelRise()
 {
   int level_dur, fall_speed = 5;
 
-  for(int level = 1; level < 256; level++) {
+  for(int _level = 1; _level < 256; _level++) {
     if(peakchangerate < 256 - 255 / fall_speed)
       level_dur = peakchangerate;
     else
-      level_dur = 255 - (255 - level) / fall_speed;
+      level_dur = 255 - (255 - _level) / fall_speed;
 
-    peak_level_length[level] = (short)(level_dur + (255 - level) / fall_speed);
+    peak_level_length[_level] = (short)(level_dur + (255 - _level) / fall_speed);
 
     for(int i = 0; i <= level_dur; i++)
-      peak_level_lookup[level][peak_level_length[level] - i] = (short)level;
+      peak_level_lookup[_level][peak_level_length[_level] - i] = (short)_level;
 
-    for(int i = level_dur + 1, y = level + fall_speed; i <= peak_level_length[level]; i++, y += fall_speed)
-      peak_level_lookup[level][peak_level_length[level] - i] = (short)y;
+    for(int i = level_dur + 1, y = _level + fall_speed; i <= peak_level_length[_level]; i++, y += fall_speed)
+      peak_level_lookup[_level][peak_level_length[_level] - i] = (short)y;
   }
 }
 
@@ -2159,34 +2157,34 @@ void PeakLevelFallAndRise()
 {
   int level_dur, fall_speed = 5;
 
-  for(int level = 1; level < 256; level++) {
-    if(level % 2) { // make peak fall
+  for(int _level = 1; _level < 256; _level++) {
+    if(_level % 2) { // make peak fall
       if(peakchangerate < 256 - 255 / fall_speed)
         level_dur = peakchangerate;
       else
-        level_dur = 255 - level / fall_speed;
+        level_dur = 255 - _level / fall_speed;
 
-      peak_level_length[level] = (short)(level_dur + level / fall_speed);
+      peak_level_length[_level] = (short)(level_dur + _level / fall_speed);
 
       for(int i = 0; i <= level_dur; i++)
-        peak_level_lookup[level][peak_level_length[level] - i] = (short)level;
+        peak_level_lookup[_level][peak_level_length[_level] - i] = (short)_level;
 
-      for(int i = level_dur + 1, y = level - fall_speed; i <= peak_level_length[level]; i++, y -= fall_speed)
-        peak_level_lookup[level][peak_level_length[level] - i] = (short)y;
+      for(int i = level_dur + 1, y = _level - fall_speed; i <= peak_level_length[_level]; i++, y -= fall_speed)
+        peak_level_lookup[_level][peak_level_length[_level] - i] = (short)y;
     }
     else {  // make peak rise
       if(peakchangerate < 256 - 255 / fall_speed)
         level_dur = peakchangerate;
       else
-        level_dur = 255 - (255 - level) / fall_speed;
+        level_dur = 255 - (255 - _level) / fall_speed;
 
-      peak_level_length[level] = (short)(level_dur + (255 - level) / fall_speed);
+      peak_level_length[_level] = (short)(level_dur + (255 - _level) / fall_speed);
 
       for(int i = 0; i <= level_dur; i++)
-        peak_level_lookup[level][peak_level_length[level] - i] = (short)level;
+        peak_level_lookup[_level][peak_level_length[_level] - i] = (short)_level;
 
-      for(int i = level_dur + 1, y = level + fall_speed; i <= peak_level_length[level]; i++, y += fall_speed)
-        peak_level_lookup[level][peak_level_length[level] - i] = (short)y;
+      for(int i = level_dur + 1, y = _level + fall_speed; i <= peak_level_length[_level]; i++, y += fall_speed)
+        peak_level_lookup[_level][peak_level_length[_level] - i] = (short)y;
     }
   }
 }
@@ -2196,50 +2194,50 @@ void PeakLevelRiseFall()
 {
   int level_dur, fall_speed = 5;
 
-  for(int level = 1; level < 256; level++) {
+  for(int _level = 1; _level < 256; _level++) {
     if(peakchangerate < 256 - 255 / fall_speed)
       level_dur = peakchangerate;
     else
-      level_dur = 255 - level / fall_speed;
+      level_dur = 255 - _level / fall_speed;
 
-    peak_level_length[level] = (short)(level_dur + level / fall_speed);
+    peak_level_length[_level] = (short)(level_dur + _level / fall_speed);
 
     float riseamount = 25.0f / (level_dur + 1);
     float rise = 0.0f;
     for(int i = 0; i <= level_dur; i++, rise += riseamount) {
-      peak_level_lookup[level][peak_level_length[level] - i] = (short)(level + rise);
-      if(peak_level_lookup[level][peak_level_length[level] - i] > 255)
-        peak_level_lookup[level][peak_level_length[level] - i] = 255;
+      peak_level_lookup[_level][peak_level_length[_level] - i] = (short)(_level + rise);
+      if(peak_level_lookup[_level][peak_level_length[_level] - i] > 255)
+        peak_level_lookup[_level][peak_level_length[_level] - i] = 255;
     }
 
-    for(int i = level_dur + 1, y = peak_level_lookup[level][level_dur] - fall_speed; i <= peak_level_length[level]; i++, y -= fall_speed)
+    for(int i = level_dur + 1, y = peak_level_lookup[_level][level_dur] - fall_speed; i <= peak_level_length[_level]; i++, y -= fall_speed)
       if(y >= 0)
-        peak_level_lookup[level][peak_level_length[level] - i] = (short)y;
+        peak_level_lookup[_level][peak_level_length[_level] - i] = (short)y;
       else
-        peak_level_lookup[level][peak_level_length[level] - i] = 0;
+        peak_level_lookup[_level][peak_level_length[_level] - i] = 0;
   }
 }
 
 // make the peaks instantly rise quickly like sparks
 void PeakLevelSparks()
 {
-  for(int level = 1; level < 256; level++) {
+  for(int _level = 1; _level < 256; _level++) {
     if(peakchangerate < 200)
-      peak_level_length[level] = (short)(peakchangerate + (m_rand.next() % 56));
-      //peak_level_length[level] = (short)(peakchangerate / 2 + random(peakchangerate / 8 + 25));
+      peak_level_length[_level] = (short)(peakchangerate + (m_rand.next() % 56));
+      //peak_level_length[_level] = (short)(peakchangerate / 2 + random(peakchangerate / 8 + 25));
     else
-      peak_level_length[level] = (short)(peakchangerate);
+      peak_level_length[_level] = (short)(peakchangerate);
 
-    int level_dur = peak_level_length[level] / 2 + (m_rand.next() % peak_level_length[level] / 3);
-    for(int i = peak_level_length[level]; i > level_dur; i--)
-      peak_level_lookup[level][i] = (short)(level);
+    int level_dur = peak_level_length[_level] / 2 + (m_rand.next() % peak_level_length[_level] / 3);
+    for(int i = peak_level_length[_level]; i > level_dur; i--)
+      peak_level_lookup[_level][i] = (short)(_level);
 
     int risevalue = (m_rand.next() % 5) + 3;
     for(int i = level_dur, rise = risevalue; i >= 0; i--, rise += risevalue) {
-      if(level + rise > 255)
-        peak_level_lookup[level][i] = 0;
+      if(_level + rise > 255)
+        peak_level_lookup[_level][i] = 0;
       else
-        peak_level_lookup[level][i] = (short)(level + rise);
+        peak_level_lookup[_level][i] = (short)(_level + rise);
     }
   }
 }
@@ -3621,9 +3619,7 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
 // makes an absolute path to the profile directory (not ending in backslash)
 void GetProfilePath(wchar_t *szBuf)
 {
-	GetModuleFileName(AtAnSt_Vis_mod.hDllInstance, szBuf, MAX_PATH);
-	PathRemoveFileSpec(szBuf);
-	PathAppend(szBuf, cszProfileDirectory);
+	PathCombine(szBuf, GetPaths()->settings_dir, L"Plugins\\vis_classic");
 }
 
 // makes an absolute path to a profile ini file
@@ -3635,22 +3631,8 @@ void GetProfileINIFilename(wchar_t *szBuf, const wchar_t *cszProfile)
 	else {
 		GetProfilePath(szBuf);
 		PathAppend(szBuf, cszProfile);
-		PathAddExtension(szBuf, cszProfileExtension);
+		PathAddExtension(szBuf, L".ini");
 	}
-}
-
-// create the profile directory (in case it doesn't exist)
-int CreateProfileDirectory(void)
-{
-	wchar_t szBuf[MAX_PATH] = {0};
-	GetProfilePath(szBuf);
-	int nErr = 0;
-	if(!CreateDirectory(szBuf, NULL)) {
-		nErr = (int)GetLastError();
-		if(nErr == ERROR_ALREADY_EXISTS)
-			nErr = 0;
-	}
-	return nErr;
 }
 
 int FileExists(const wchar_t *cszFilename)
@@ -3678,7 +3660,7 @@ HANDLE FindProfileFiles(LPWIN32_FIND_DATA pfd)
 {
 	wchar_t szPath[MAX_PATH] = {0};
 	GetProfilePath(szPath);
-	wcsncat(szPath, L"\\*.ini", ARRAYSIZE(szPath));
+	PathAppend(szPath, L"*.ini");
 	return FindFirstFile(szPath, pfd);
 }
 
@@ -3931,31 +3913,35 @@ void SaveMainIniSettings(void)
 int SaveProfileIni(const wchar_t *cszProfile)
 {
 	SaveMainIniSettings();
-	if(!CreateProfileDirectory()) {
-		wchar_t szFilename[MAX_PATH] = {0};
-		GetProfileINIFilename(szFilename, cszProfile);
-		WritePrivateProfileInt(cszIniMainSection, L"Falloff", falloffrate, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"PeakChange", peakchangerate, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"Bar Width", requested_band_width, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"X-Spacing", x_spacing, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"Y-Spacing", y_spacing, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"BackgroundDraw", backgrounddraw, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"BarColourStyle", barcolourstyle, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"PeakColourStyle", peakcolourstyle, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"Effect", effect, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"Peak Effect", peakleveleffect, szFilename);
-		WritePrivateProfileInt(cszIniMainSection, L"Bar Level", levelbase, szFilename);
-		WritePrivateProfileBool(cszIniMainSection, L"ReverseLeft", reverseleft, szFilename);
-		WritePrivateProfileBool(cszIniMainSection, L"ReverseRight", reverseright, szFilename);
-		WritePrivateProfileBool(cszIniMainSection, L"Mono", mono, szFilename);
-		WritePrivateProfileBool(cszIniMainSection, L"FFTEqualize", bFftEqualize, szFilename);
-		WritePrivateProfileFloat(cszIniMainSection, L"FFTEnvelope", fFftEnvelope, szFilename);
-		WritePrivateProfileFloat(cszIniMainSection, L"FFTScale", fFftScale, szFilename);
-		WritePrivateProfileColourArray(L"BarColours", FreqBarColour, 256, szFilename);
-		WritePrivateProfileColourArray(L"PeakColours", PeakColour, 256, szFilename);
-		WritePrivateProfileColourArray(L"VolumeColours", VolumeColour, 256, szFilename);
-		WritePrivateProfileIntArray(L"VolumeFunction", volume_func, 256, szFilename);
-	}
+
+	wchar_t szFilename[MAX_PATH] = {0};
+	GetProfileINIFilename(szFilename, cszProfile);
+
+	WritePrivateProfileInt(cszIniMainSection, L"Falloff", falloffrate, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"PeakChange", peakchangerate, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"Bar Width", requested_band_width, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"X-Spacing", x_spacing, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"Y-Spacing", y_spacing, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"BackgroundDraw", backgrounddraw, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"BarColourStyle", barcolourstyle, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"PeakColourStyle", peakcolourstyle, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"Effect", effect, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"Peak Effect", peakleveleffect, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"Bar Level", levelbase, szFilename);
+
+	WritePrivateProfileBool(cszIniMainSection, L"ReverseLeft", reverseleft, szFilename);
+	WritePrivateProfileBool(cszIniMainSection, L"ReverseRight", reverseright, szFilename);
+	WritePrivateProfileBool(cszIniMainSection, L"Mono", mono, szFilename);
+	WritePrivateProfileBool(cszIniMainSection, L"FFTEqualize", bFftEqualize, szFilename);
+
+	WritePrivateProfileFloat(cszIniMainSection, L"FFTEnvelope", fFftEnvelope, szFilename);
+	WritePrivateProfileFloat(cszIniMainSection, L"FFTScale", fFftScale, szFilename);
+
+	WritePrivateProfileColourArray(L"BarColours", FreqBarColour, 256, szFilename);
+	WritePrivateProfileColourArray(L"PeakColours", PeakColour, 256, szFilename);
+	WritePrivateProfileColourArray(L"VolumeColours", VolumeColour, 256, szFilename);
+
+	WritePrivateProfileIntArray(L"VolumeFunction", volume_func, 256, szFilename);
 	return 0;
 }
 
@@ -4158,9 +4144,10 @@ void AboutMessage(void)
 #ifdef WACUP_BUILD
 	// TODO localise
 	wchar_t message[1024] = {0};
-	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer plug-in originally "
-			   L"by Mike Lynch (Copyright © 2007-2018)\n\nUpdated by Darren Owen aka DrO for "
-			   L"WACUP\nhttps://github.com/WACUP/vis_classic\n\nBuild date: %s", TEXT(__DATE__));
+	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer plug-in originally\n"
+			   L"by Mike Lynch (Copyright © 2007-2018)\n\nUpdated by Darren Owen aka DrO for\n"
+			   L"WACUP (Copyright © 2018-2020)\n\nhttps://github.com/WACUP/vis_classic\n\n"
+			   L"Build date: %s", TEXT(__DATE__));
 	AboutMessageBox(hatan, message, L"Classic Spectrum Analyzer");
 #else
 	MessageBox(hatan, L"Classic Spectrum Analyzer\n\nCopyright © 2007 Mike Lynch\n\n"
