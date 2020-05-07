@@ -539,10 +539,6 @@ void AtAnQuit(winampVisModule *this_mod)
 		delete[] caSpectrumData[0];
 	if(caSpectrumData[1])
 		delete[] caSpectrumData[1];
-
-	SetFocus(this_mod->hwndParent);
-	SetActiveWindow(this_mod->hwndParent);
-	SetForegroundWindow(this_mod->hwndParent);
 }
 
 void FFTAnalyze(winampVisModule *this_mod)
