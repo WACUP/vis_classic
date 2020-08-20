@@ -422,8 +422,9 @@ int AtAnStInit(winampVisModule *this_mod)
 		// this sets a GUID which can be used in a modern skin / other parts of Winamp to
 		// indentify the embedded window frame such as allowing it to activated in a skin
 		SET_EMBED_GUID((&myWindowState), embed_guid);
-		myWindowState.flags |= EMBED_FLAGS_SCALEABLE_WND;	// double-size support!
-		myWindowState.flags |= EMBED_FLAGS_NOTRANSPARENCY | EMBED_FLAGS_NOWINDOWMENU;
+		myWindowState.flags = EMBED_FLAGS_SCALEABLE_WND |	// double-size support!
+							  EMBED_FLAGS_NOWINDOWMENU |
+							  EMBED_FLAGS_NOTRANSPARENCY;
 
 		HWND parent = embed(&myWindowState);
 		if (IsWindow(parent)) {
@@ -509,15 +510,17 @@ void AtAnQuit(winampVisModule *this_mod)
 	if(IsWindow(this_mod->hwndParent))
 		PostMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_SETVISWND);
 
-	if(IsMenu(hmenu))
+	if (IsMenu(hmenu)) {
 		DestroyMenu(hmenu);
+		hmenu = NULL;
+	}
 
 	if(IsWindow(myWindowState.me)) {
 		DestroyWindow(myWindowState.me);
 		myWindowState.me = NULL;
 	}
 
-	if(IsWindow(hatan)) {
+	if (IsWindow(hatan)) {
 		DestroyWindow(hatan);
 		hatan = NULL;
 	}
@@ -993,7 +996,7 @@ void CalculateAndUpdate(void)
 	EraseWindow();
 	ClearBackground();
 	BackgroundDraw(0);
-	if(IsWindow(hatan))
+	if (IsWindow(hatan))
 		InvalidateRect(hatan, NULL, FALSE);
 }
 
@@ -2326,7 +2329,8 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 					SendMessage(AtAnSt_Vis_mod.hwndParent, WM_WA_IPC, 0, IPC_CB_VISRANDOM);
 					// if not being asked about random state, load a random profile
 					if(HIWORD(wParam) != 0xFFFF) {
-					    LoadProfileNumber(m_rand.next() % CountProfileFiles());
+						const unsigned int count = CountProfileFiles();
+						LoadProfileNumber((count > 0 ? (m_rand.next() % count) : 0));
 						SaveDialog_UpdateProfilesProperty();
 					}
 				}
