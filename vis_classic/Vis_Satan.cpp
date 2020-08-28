@@ -496,11 +496,17 @@ int AtAnStInit(winampVisModule *this_mod)
 
 void AtAnQuit(winampVisModule *this_mod)
 {
-	// save window position
-	WritePrivateProfileInt(cszIniMainSection, L"WindowPosLeft", myWindowState.r.left, szMainIniFilename);
-	WritePrivateProfileInt(cszIniMainSection, L"WindowPosRight", myWindowState.r.right, szMainIniFilename);
-	WritePrivateProfileInt(cszIniMainSection, L"WindowPosTop", myWindowState.r.top, szMainIniFilename);
-	WritePrivateProfileInt(cszIniMainSection, L"WindowPosBottom", myWindowState.r.bottom, szMainIniFilename);
+	// unless we're closing as a classic skin then we'll
+	// skip saving the current window position otherwise
+	// we have the issue with windows being in the wrong
+	// places after modern -> exit -> modern -> classic
+	if (!myWindowState.wasabi_window)
+	{
+		WritePrivateProfileInt(cszIniMainSection, L"WindowPosLeft", myWindowState.r.left, szMainIniFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"WindowPosRight", myWindowState.r.right, szMainIniFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"WindowPosTop", myWindowState.r.top, szMainIniFilename);
+		WritePrivateProfileInt(cszIniMainSection, L"WindowPosBottom", myWindowState.r.bottom, szMainIniFilename);
+	}
 
 	// close the config window with property exit code (changes will be lost)
 	if(IsWindow(config_win))
