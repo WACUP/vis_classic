@@ -382,6 +382,15 @@ void OpenConfigStereoWindow()
 		BringWindowToTop(config_win);
 }
 
+int CALLBACK EmbedWndCallback(embedWindowState *windowState, INT eventId, LPARAM param)
+{
+	if (eventId == 2)
+	{
+		PostMessage(windowState->me, WM_USER + (!param ? 102 : 105), 0, 0);
+	}
+	return 0;
+}
+
 // init for the stereo attached analyser
 int AtAnStInit(winampVisModule *this_mod)
 {
@@ -431,6 +440,15 @@ int AtAnStInit(winampVisModule *this_mod)
 			// TODO localise
 			SetWindowText(myWindowState.me, L"Classic Spectrum Analyzer"); // set window title
 
+			// if the parent is minimised then this will
+			// help to prevent it appearing on screen as
+			// it otherwise looks odd showing on its own
+			if (IsIconic(this_mod->hwndParent) &&
+				(myWindowState.wasabi_window == NULL))
+			{
+				myWindowState.callback = EmbedWndCallback;
+			}
+
 			//register window class
 			WNDCLASS wc = {0};
 			wc.lpfnWndProc = AtAnWndProc;
@@ -446,8 +464,6 @@ int AtAnStInit(winampVisModule *this_mod)
 					UnregisterClass(cszClassName, this_mod->hDllInstance);
 					return 1;
 				}
-
-				SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);
 
 				// assign popup menu
 				hmenu = LoadMenu(this_mod->hDllInstance, MAKEINTRESOURCE(IDM_POPUP));
@@ -485,8 +501,14 @@ int AtAnStInit(winampVisModule *this_mod)
 
 				m_rand.seed(GetTickCount());
 
-				// show the window
-				ShowWindow(parent, SW_SHOWNA);
+				SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);
+
+				// to better match the current visible state of WACUP it's
+				// necessary to avoid showing our window when minimised :)
+				if (!IsIconic(this_mod->hwndParent))
+				{
+					PostMessage(parent, WM_USER + 102, 0, 0);
+				}
 				return 0;
 			}
 		}
@@ -650,7 +672,9 @@ int AtAnStDirectRender(winampVisModule *this_mod)
 		}
 	}
 
-	volume /= bands;  // make volume average of all bands calculated
+	if (bands) {
+		volume /= bands;  // make volume average of all bands calculated
+	}
 
 	BackgroundDraw((unsigned char)volume);  // clear (draw) the background
 
@@ -2392,7 +2416,7 @@ BOOL ConfigDialog_Notify(HWND hwndDlg, LPARAM lParam)
 	case PSN_RESET: // Cancel hit
 		if(IsWindow(hatan))
 			ConfigDialog_PostCloseMessage(PROP_WIN_CANCEL);
-		SetWindowLong(hwndDlg, DWL_MSGRESULT, PSNRET_NOERROR);
+		SetWindowLongPtr(hwndDlg, DWL_MSGRESULT, PSNRET_NOERROR);
 		return TRUE;
 	case PSN_APPLY: // Apply/OK hit
 		// if vis window and OK clicked, request to close properties
@@ -2400,7 +2424,7 @@ BOOL ConfigDialog_Notify(HWND hwndDlg, LPARAM lParam)
 			ConfigDialog_PostCloseMessage(PROP_WIN_OK);
 		else // Apply clicked
 			SaveTempCurrentSettings();
-		SetWindowLong(hwndDlg, DWL_MSGRESULT, PSNRET_NOERROR);
+		SetWindowLongPtr(hwndDlg, DWL_MSGRESULT, PSNRET_NOERROR);
 		return TRUE;
 	default:
 		return FALSE;
@@ -4152,7 +4176,7 @@ void AboutMessage(void)
 	wchar_t message[1024] = {0};
 	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer plug-in originally\n"
 			   L"by Mike Lynch (Copyright © 2007-2018)\n\nUpdated by Darren Owen aka DrO for\n"
-			   L"WACUP (Copyright © 2018-2020)\n\nhttps://github.com/WACUP/vis_classic\n\n"
+			   L"WACUP (Copyright © 2018-2021)\n\nhttps://github.com/WACUP/vis_classic\n\n"
 			   L"Build date: %s", TEXT(__DATE__));
 	AboutMessageBox(hatan, message, L"Classic Spectrum Analyzer");
 #else
