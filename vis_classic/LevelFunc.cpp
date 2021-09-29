@@ -2,11 +2,11 @@
 
 // TODO try to use log1p on compatible VS builds
 
-void LinearTable(int *table)
+/*void LinearTable(int *table)
 {
   for(int i = 0; i < 256; i++)
     table[i] = table[i];  // linear
-}
+}*/
 
 void LogBase10Table(int *table)
 {
@@ -17,25 +17,29 @@ void LogBase10Table(int *table)
 void LogBase20Table(int *table)
 {
   for(int i = 0; i < 256; i++)
-    table[i] = (int)(log(1.0 + (double)table[i] / 13.4211) / log(20.0) * 256.0);   // log base 20
+    //table[i] = (int)(log(1.0 + (double)table[i] / 13.4211) / log(20.0) * 256.0);   // log base 20
+    table[i] = (int)(log1p((double)table[i] / 13.4211) / log(20.0) * 256.0);   // log base 20
 }
 
 void LogBase30Table(int *table)
 {
   for(int i = 0; i < 256; i++)
-    table[i] = (int)(log(1.0 + (double)table[i] / 8.79311) / log(30.0) * 256.0);   // log base 30
+    //table[i] = (int)(log(1.0 + (double)table[i] / 8.79311) / log(30.0) * 256.0);   // log base 30
+    table[i] = (int)(log1p((double)table[i] / 8.79311) / log(30.0) * 256.0);   // log base 30
 }
 
 void LogBase100Table(int *table)
 {
   for(int i = 0; i < 256; i++)
-    table[i] = (int)(log(1.0 + (double)table[i] / 2.57576) / log(100.0) * 256.0);   // log base 100
+    //table[i] = (int)(log(1.0 + (double)table[i] / 2.57576) / log(100.0) * 256.0);   // log base 100
+    table[i] = (int)(log1p((double)table[i] / 2.57576) / log(100.0) * 256.0);   // log base 100
 }
 
 void NaturalLogTable(int *table)
 {
   for(int i = 0; i < 256; i++)
-    table[i] = (int)(log(1.0 + (double)table[i] / 148.4041) * 256.0);   // natural log
+    //table[i] = (int)(log(1.0 + (double)table[i] / 148.4041) * 256.0);   // natural log
+    table[i] = (int)(log1p((double)table[i] / 148.4041) * 256.0);   // natural log
 }
 
 void SineTable(int *table)

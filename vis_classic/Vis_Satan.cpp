@@ -2707,7 +2707,7 @@ UpdateControls:
             case IDC_ADD: {   // apply the selected function
               switch(selected_func) {
                 case IDC_LINEAR:
-                  LinearTable(function_table);
+                  //LinearTable(function_table);
                   break;
                 case IDC_LOG10:
                   LogBase10Table(function_table);
@@ -2746,7 +2746,7 @@ UpdateControls:
                 temptbl[i] = i;
               switch(selected_func) {
                 case IDC_LINEAR:
-                  LinearTable(temptbl);
+                  //LinearTable(temptbl);
                   break;
                 case IDC_LOG10:
                   LogBase10Table(temptbl);
@@ -3649,7 +3649,7 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
 // makes an absolute path to the profile directory (not ending in backslash)
 void GetProfilePath(wchar_t *szBuf)
 {
-	PathCombine(szBuf, GetPaths()->settings_dir, L"Plugins\\vis_classic");
+	PathCombine(szBuf, GetPaths()->settings_sub_dir, L"vis_classic");
 }
 
 // makes an absolute path to a profile ini file
