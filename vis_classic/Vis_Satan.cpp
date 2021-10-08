@@ -2305,7 +2305,7 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				// as us being on a different thread doesn't
 				// work with how the gen_ml skinning works
 				TrackPopup(popupmenu, TPM_LEFTALIGN | TPM_LEFTBUTTON |
-						   TPM_TOPALIGN | TPM_RIGHTBUTTON, xPos, yPos, hwnd, FALSE);
+						   TPM_TOPALIGN | TPM_RIGHTBUTTON, xPos, yPos, hwnd);
 #else
 				TrackPopupMenu(popupmenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_TOPALIGN |
 							   TPM_RIGHTBUTTON, xPos, yPos, 0, hwnd, NULL);
@@ -2375,7 +2375,7 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 						// we force the un-skinned version of the menu
 						// as us being on a different thread doesn't
 						// work with how the gen_ml skinning works
-						TrackPopup(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, hwnd, FALSE);
+						TrackPopup(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, hwnd);
 #else
 						TrackPopupMenu(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, 0, hwnd, NULL);
 #endif

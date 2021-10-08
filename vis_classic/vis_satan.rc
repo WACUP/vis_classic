@@ -242,12 +242,14 @@ END
 IDM_POPUP MENU
 CHARACTERISTICS 0x00000001
 BEGIN
-    POPUP "Popup"
+    POPUP ""
     BEGIN
         MENUITEM "&Properties...",              CM_CONFIG
         MENUITEM "Pro&files...",                CM_PROFILES
-        MENUITEM "&Close",                      CM_CLOSE
+        MENUITEM SEPARATOR
         MENUITEM "&About...",                   CM_ABOUT
+        MENUITEM SEPARATOR
+        MENUITEM "&Quit",                       CM_CLOSE
     END
 END
 
@@ -258,8 +260,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,0,11,0
- PRODUCTVERSION 2,0,11,0
+ FILEVERSION 2,0,12,0
+ PRODUCTVERSION 2,0,12,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -276,12 +278,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "WACUP (WinAmp Community Update Project)"
             VALUE "FileDescription", "Winamp Visualization Plug-in"
-            VALUE "FileVersion", "2.0.11.0"
+            VALUE "FileVersion", "2.0.12.0"
             VALUE "InternalName", "Classic Spectrum Analyser"
             VALUE "LegalCopyright", "Copyright © 1998-2019 Mike Lynch. Modifications by Darren Owen aka DrO © 2018-2021"
             VALUE "OriginalFilename", "vis_classic.dll"
             VALUE "ProductName", "Classic Spectrum Analyser"
-            VALUE "ProductVersion", "2.0.11.0"
+            VALUE "ProductVersion", "2.0.12.0"
         END
     END
     BLOCK "VarFileInfo"
