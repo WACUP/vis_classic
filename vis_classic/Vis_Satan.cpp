@@ -221,7 +221,8 @@ bool reverseleft = true, reverseright = false, mono = true;
 int volume_func[256] = {0};
 
 // style
-int backgrounddraw = 0, barcolourstyle = 0, peakcolourstyle = 0, effect = 0, peakleveleffect = 0;
+int backgrounddraw = 0, barcolourstyle = 0, peakcolourstyle = 0,
+	effect = 0, peakleveleffect = 0, peakfalloffmode = 0;
 
 int win_height = 20, win_width = 100, draw_x_start = 0, draw_y_start = 0;
 int image_width = 0;
@@ -1173,6 +1174,7 @@ void DefaultSettings()
 	peakcolourstyle = PEAK_FADE;
 	effect = EFFECT_FADESHADOW;
 	peakleveleffect = PEAK_EFFECT_FALL;
+	peakfalloffmode = 0;
 	levelbase = LEVEL_AVERAGE;
 	bFftEqualize = true;
 	fFftEnvelope = 0.2f;
@@ -2142,28 +2144,38 @@ void PeakLevelNormal()
 // makes the peaks fall
 void PeakLevelFall()
 {
-  int level_dur, fall_speed = 5;
+  const int fall_speed = 5;
+  int level_dur;
 
   for(int _level = 1; _level < 256; _level++) {
     if(peakchangerate < 256 - 255 / fall_speed)
       level_dur = peakchangerate;
     else
-      level_dur = 255 - _level / fall_speed;
+      level_dur = (255 - _level) / fall_speed;
 
     peak_level_length[_level] = (short)(level_dur + _level / fall_speed);
 
     for(int i = 0; i <= level_dur; i++)
       peak_level_lookup[_level][peak_level_length[_level] - i] = (short)_level;
 
-    for(int i = level_dur + 1, y = _level - fall_speed; i <= peak_level_length[_level]; i++, y -= fall_speed)
-      peak_level_lookup[_level][peak_level_length[_level] - i] = (short)y;
+    for(int i = level_dur + 1, y = _level - fall_speed; i <= peak_level_length[_level]; i++, y -= fall_speed) {
+      if (!peakfalloffmode) {
+        // original linear change
+        peak_level_lookup[_level][peak_level_length[_level] - i] = (short)y;
+      }
+      else {
+        // normalised log change which will be a slow to fast change
+        peak_level_lookup[_level][peak_level_length[_level] - i] = (y > 0 ? (short)floor((log10(y) / log10(_level)) * _level) : 0);
+      }
+    }
   }
 }
 
 // makes the peaks rise
 void PeakLevelRise()
 {
-  int level_dur, fall_speed = 5;
+  const int fall_speed = 5;
+  int level_dur;
 
   for(int _level = 1; _level < 256; _level++) {
     if(peakchangerate < 256 - 255 / fall_speed)
@@ -2184,7 +2196,8 @@ void PeakLevelRise()
 // makes half the peaks fall and half rise
 void PeakLevelFallAndRise()
 {
-  int level_dur, fall_speed = 5;
+  const int fall_speed = 5;
+  int level_dur;
 
   for(int _level = 1; _level < 256; _level++) {
     if(_level % 2) { // make peak fall
@@ -2221,7 +2234,8 @@ void PeakLevelFallAndRise()
 // makes the peaks rise a bit then fall
 void PeakLevelRiseFall()
 {
-  int level_dur, fall_speed = 5;
+  const int fall_speed = 5;
+  int level_dur;
 
   for(int _level = 1; _level < 256; _level++) {
     if(peakchangerate < 256 - 255 / fall_speed)
@@ -2913,12 +2927,21 @@ BOOL CALLBACK StyleDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
       SendDlgItemMessage(hwndDlg, selected_effect, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
       SendDlgItemMessage(hwndDlg, selected_peakeffect, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
 
+      CheckDlgButton(hwndDlg, IDC_PEAK_FALL_OFF_MODE, (peakfalloffmode ? BST_CHECKED : BST_UNCHECKED));
+
+      EnableControl(hwndDlg, IDC_PEAK_FALL_OFF_MODE,
+					(peakleveleffect == PEAK_EFFECT_FALL)/* ||
+					(peakleveleffect == PEAK_EFFECT_RISE)*/);
       return true;
     }
     case WM_COMMAND:
       switch(HIWORD(wParam)) {
         case BN_CLICKED:
           switch(LOWORD(wParam)) {
+            case IDC_PEAK_FALL_OFF_MODE:
+              peakfalloffmode = !!IsDlgButtonChecked(hwndDlg, LOWORD(wParam));
+              UpdatePeakColourLookup();
+              return true;
             case IDC_PEAKEFFECT_NORMAL:
             case IDC_PEAKEFFECT_FALL:
             case IDC_PEAKEFFECT_RISE:
@@ -2948,6 +2971,9 @@ BOOL CALLBACK StyleDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
                     peakleveleffect = PEAK_EFFECT_SPARKS;
                     break;
                 }
+                EnableControl(hwndDlg, IDC_PEAK_FALL_OFF_MODE,
+							  (peakleveleffect == PEAK_EFFECT_FALL)/* ||
+							  (peakleveleffect == PEAK_EFFECT_RISE)*/);
                 CalculateVariables();
                 UpdatePeakColourLookup();
               }
@@ -3788,6 +3814,7 @@ int LoadProfileIni(const wchar_t *cszProfile)
 	peakcolourstyle = ReadPrivateProfileInt(cszIniMainSection, L"PeakColourStyle", peakcolourstyle, PEAK_MIN, PEAK_MAX, szFilename);
 	effect = ReadPrivateProfileInt(cszIniMainSection, L"Effect", effect, EFFECT_MIN, EFFECT_MAX, szFilename);
 	peakleveleffect = ReadPrivateProfileInt(cszIniMainSection, L"Peak Effect", peakleveleffect, PEAK_EFFECT_MIN, PEAK_EFFECT_MAX, szFilename);
+	peakfalloffmode = ReadPrivateProfileBool(cszIniMainSection, L"PeakFallOffMode", peakfalloffmode, szFilename);
 	levelbase = ReadPrivateProfileInt(cszIniMainSection, L"Bar Level", levelbase, LEVEL_MIN, LEVEL_MAX, szFilename);
 	reverseleft = ReadPrivateProfileBool(cszIniMainSection, L"ReverseLeft", reverseleft, szFilename);
 	reverseright = ReadPrivateProfileBool(cszIniMainSection, L"ReverseRight", reverseright, szFilename);
@@ -3957,6 +3984,7 @@ int SaveProfileIni(const wchar_t *cszProfile)
 	WritePrivateProfileInt(cszIniMainSection, L"PeakColourStyle", peakcolourstyle, szFilename);
 	WritePrivateProfileInt(cszIniMainSection, L"Effect", effect, szFilename);
 	WritePrivateProfileInt(cszIniMainSection, L"Peak Effect", peakleveleffect, szFilename);
+	WritePrivateProfileInt(cszIniMainSection, L"PeakFallOffMode", peakfalloffmode, szFilename);
 	WritePrivateProfileInt(cszIniMainSection, L"Bar Level", levelbase, szFilename);
 
 	WritePrivateProfileBool(cszIniMainSection, L"ReverseLeft", reverseleft, szFilename);

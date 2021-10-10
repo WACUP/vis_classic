@@ -1,4 +1,4 @@
-#define PLUGIN_VERSION " v2.0.12"
+#define PLUGIN_VERSION " v2.0.13"
 #define CS_MODULE_TITLE "Classic Spectrum Analyzer" PLUGIN_VERSION
 
 void FFTInit(unsigned int nNewFft);
