@@ -1,5 +1,9 @@
-#define PLUGIN_VERSION " v2.0.13"
+#define PLUGIN_VERSION " v2.1.1"
+#ifndef _WIN64
 #define CS_MODULE_TITLE "Classic Spectrum Analyzer" PLUGIN_VERSION
+#else
+#define CS_MODULE_TITLE TEXT("Classic Spectrum Analyzer") TEXT(PLUGIN_VERSION)
+#endif
 
 void FFTInit(unsigned int nNewFft);
 void ConfigStereo(struct winampVisModule *);
@@ -83,7 +87,7 @@ void CalculateAndUpdate(void);
 // File functions
 void GetProfileINIFilename(wchar_t *szBuf, const wchar_t *cszProfile);
 int CreateProfileDirectory(void);
-int FileExists(const wchar_t *cszFilename);
+int ProfileFileExists(const wchar_t *cszFilename);
 void DeleteProfile(const wchar_t *cszProfile);
 HANDLE FindProfileFiles(LPWIN32_FIND_DATAA pfd);
 void EnumProfilesToControl(HWND hDlg, int nIDDlgItem, UINT nMsg, UINT nSelMsg);
@@ -104,7 +108,6 @@ int SaveProfileIni(const wchar_t *cszProfile);
 void SaveProfileNameEntry(const wchar_t *cszProfile);
 int SaveTempCurrentSettings(void);
 int SaveProfile(const wchar_t *cszProfile);
-void ValidateRectPosition(int nMax, LONG *pnLeft, LONG *pnRight);
 void AboutMessage(void);
 
 LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);

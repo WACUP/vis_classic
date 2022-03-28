@@ -409,15 +409,11 @@ int AtAnStInit(winampVisModule *this_mod)
 
 	// makes an absolute path to the ini file
 #ifdef WACUP_BUILD
-	PathCombine(szMainIniFilename, GetPaths()->settings_dir, cszIniFilename);
+    CombinePath(szMainIniFilename, GetPaths()->settings_dir, cszIniFilename);
 #else
 	PathCombine(szMainIniFilename, (wchar_t*)SendMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_GETINIDIRECTORYW), cszIniFilename);
 #endif
 
-	HWND (*embed)(embedWindowState *v);
-	*(void**)&embed = (void *)SendMessage(this_mod->hwndParent, WM_WA_IPC, (LPARAM)0, IPC_GET_EMBEDIF);
-	if(embed)
-	{
 		// default to under Winamp
 		RECT rWinamp = {0};
 		GetWindowRect(this_mod->hwndParent, &rWinamp);
@@ -436,7 +432,12 @@ int AtAnStInit(winampVisModule *this_mod)
 							  EMBED_FLAGS_NOWINDOWMENU |
 							  EMBED_FLAGS_NOTRANSPARENCY;
 
-		HWND parent = embed(&myWindowState);
+    // to avoid issues, the skinned window has to be created on the
+    // thread that it's being run from otherwise it'll fail create
+    // or it'll do weird things when trying to close it (aka crash)
+    // otherwise have to call IPC_GET_EMBEDIF (slow) & then use the
+    // returned method from it which sometimes doesn't work nicely
+    HWND parent = CreateEmbedWindow(&myWindowState);
 		if (IsWindow(parent)) {
 			// TODO localise
 			SetWindowText(myWindowState.me, L"Classic Spectrum Analyzer"); // set window title
@@ -513,7 +514,6 @@ int AtAnStInit(winampVisModule *this_mod)
 				return 0;
 			}
 		}
-	}
 	return -1;
 }
 
@@ -2341,7 +2341,10 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				GetClientRect(hwnd, &r);
 				win_width = r.right - r.left;
 				win_height = r.bottom - r.top;
+                if ((win_width > 2) && (win_height > 2))
+                {
 				CalculateAndUpdate();
+			}
 			}
 			return 0;
 		case WM_COMMAND:
@@ -2430,7 +2433,7 @@ BOOL ConfigDialog_Notify(HWND hwndDlg, LPARAM lParam)
 	case PSN_RESET: // Cancel hit
 		if(IsWindow(hatan))
 			ConfigDialog_PostCloseMessage(PROP_WIN_CANCEL);
-		SetWindowLongPtr(hwndDlg, DWL_MSGRESULT, PSNRET_NOERROR);
+		SetWindowLongPtr(hwndDlg, DWLP_MSGRESULT, PSNRET_NOERROR);
 		return TRUE;
 	case PSN_APPLY: // Apply/OK hit
 		// if vis window and OK clicked, request to close properties
@@ -2438,7 +2441,7 @@ BOOL ConfigDialog_Notify(HWND hwndDlg, LPARAM lParam)
 			ConfigDialog_PostCloseMessage(PROP_WIN_OK);
 		else // Apply clicked
 			SaveTempCurrentSettings();
-		SetWindowLongPtr(hwndDlg, DWL_MSGRESULT, PSNRET_NOERROR);
+		SetWindowLongPtr(hwndDlg, DWLP_MSGRESULT, PSNRET_NOERROR);
 		return TRUE;
 	default:
 		return FALSE;
@@ -3358,7 +3361,7 @@ UpdateControls:
               colour.rgbResult = FixCOLORREF(current_colour);  // result
               colour.lpCustColors = UserColours;   // user colours
               colour.Flags = CC_FULLOPEN | CC_RGBINIT;
-              if(ChooseColor(&colour)) {  // now choose the colour
+              if(PickColour(&colour)) {  // now choose the colour
                 // if a colour was chosen, fix it and update the display
                 current_colour = FixCOLORREF(colour.rgbResult);
                 SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETPOS, (WPARAM)true, GetBValue(current_colour));
@@ -3675,7 +3678,11 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
 // makes an absolute path to the profile directory (not ending in backslash)
 void GetProfilePath(wchar_t *szBuf)
 {
+#ifdef WACUP_BUILD
+	CombinePath(szBuf, GetPaths()->settings_sub_dir, L"vis_classic");
+#else
 	PathCombine(szBuf, GetPaths()->settings_sub_dir, L"vis_classic");
+#endif
 }
 
 // makes an absolute path to a profile ini file
@@ -3686,12 +3693,12 @@ void GetProfileINIFilename(wchar_t *szBuf, const wchar_t *cszProfile)
 	}
 	else {
 		GetProfilePath(szBuf);
-		PathAppend(szBuf, cszProfile);
-		PathAddExtension(szBuf, L".ini");
+        AppendOnPath(szBuf, cszProfile);
+        AddExtension(szBuf, L".ini");
 	}
 }
 
-int FileExists(const wchar_t *cszFilename)
+int ProfileFileExists(const wchar_t *cszFilename)
 {
 	WIN32_FIND_DATA fd = {0};
 	HANDLE h = FindFirstFile(cszFilename, &fd);
@@ -3716,7 +3723,7 @@ HANDLE FindProfileFiles(LPWIN32_FIND_DATA pfd)
 {
 	wchar_t szPath[MAX_PATH] = {0};
 	GetProfilePath(szPath);
-	PathAppend(szPath, L"*.ini");
+    AppendOnPath(szPath, L"*.ini");
 	return FindFirstFile(szPath, pfd);
 }
 
@@ -3800,7 +3807,7 @@ int LoadProfileIni(const wchar_t *cszProfile)
 
 	wchar_t szFilename[MAX_PATH] = {0};
 	GetProfileINIFilename(szFilename, cszProfile);
-	int error = FileExists(szFilename);
+	int error = ProfileFileExists(szFilename);
 	if(error)
 		return error;
 
@@ -3952,10 +3959,6 @@ void LoadWindowPostion(RECT *pr)
 	pr->right = GetPrivateProfileInt(cszIniMainSection, L"WindowPosRight", pr->right, szMainIniFilename);
 	pr->top = GetPrivateProfileInt(cszIniMainSection, L"WindowPosTop", pr->top, szMainIniFilename);
 	pr->bottom = GetPrivateProfileInt(cszIniMainSection, L"WindowPosBottom", pr->bottom, szMainIniFilename);
-
-	// make sure the window is not off screen
-	ValidateRectPosition(GetSystemMetrics(SM_CXSCREEN), &pr->left, &pr->right);
-	ValidateRectPosition(GetSystemMetrics(SM_CYSCREEN), &pr->top, &pr->bottom);
 }
 
 /*
@@ -4179,24 +4182,6 @@ void CreateRandomRamp(COLORREF *table)
   };
 }
 
-// make sure a rectangle's dimension is not off screen
-void ValidateRectPosition(int nMax, LONG *pnLeft, LONG *pnRight)
-{
-	int nWidth = *pnRight - *pnLeft;
-	if(nWidth > nMax)
-		nWidth = nMax;
-	else if(nWidth <= 0)
-		nWidth = 100;
-
-	if(*pnRight < 0) {
-		*pnLeft = 0;
-		*pnRight = nWidth;
-	} else if(*pnLeft > nMax) {
-		*pnRight = nMax;
-		*pnLeft = nMax - nWidth;
-	}
-}
-
 void AboutMessage(void)
 {
 #ifdef WACUP_BUILD
@@ -4204,7 +4189,7 @@ void AboutMessage(void)
 	wchar_t message[1024] = {0};
 	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer plug-in originally\n"
 			   L"by Mike Lynch (Copyright © 2007-2018)\n\nUpdated by Darren Owen aka DrO for\n"
-			   L"WACUP (Copyright © 2018-2021)\n\nhttps://github.com/WACUP/vis_classic\n\n"
+			   L"WACUP (Copyright © 2018-2022)\n\nhttps://github.com/WACUP/vis_classic\n\n"
 			   L"Build date: %s", TEXT(__DATE__));
 	AboutMessageBox(hatan, message, L"Classic Spectrum Analyzer");
 #else
