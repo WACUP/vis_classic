@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "File.h"
 #include <stdlib.h>
+#include <loader/loader/utils.h>
 
 // fixed length for temp strings
 #define TEMP_STRING_LENGTH 64
@@ -24,15 +25,15 @@ void WritePrivateProfileFloat(const wchar_t *cszSection, const wchar_t *cszKey, 
 void WritePrivateProfileInt(const wchar_t *cszSection, const wchar_t *cszKey, int nValue, const wchar_t *cszFilename)
 {
 	wchar_t szTemp[TEMP_STRING_LENGTH] = {0};
-	WritePrivateProfileString(cszSection, cszKey, _itow(nValue, szTemp, 10), cszFilename) ? 0 : 1;
+	WritePrivateProfileString(cszSection, cszKey, I2WStr(nValue, szTemp, ARRAYSIZE(szTemp)), cszFilename) ? 0 : 1;
 }
 
 void WritePrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsigned int nSize, const wchar_t *cszFilename)
 {
-	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
 	for(unsigned int i = 0; i < nSize; i++)
 	{
-		WritePrivateProfileInt(cszSection, _itow(i, szKey, 10), pnValues[i], cszFilename);
+		wchar_t szKey[TEMP_STRING_LENGTH] = { 0 };
+		WritePrivateProfileInt(cszSection, I2WStr(i, szKey, ARRAYSIZE(szKey)), pnValues[i], cszFilename);
 	}
 }
 
@@ -45,10 +46,10 @@ void WritePrivateProfileColour(const wchar_t *cszSection, const wchar_t *cszKey,
 
 void WritePrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValues, unsigned int nSize, const wchar_t *cszFilename)
 {
-	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
 	for(unsigned int i = 0; i < nSize; i++)
 	{
-		WritePrivateProfileColour(cszSection, _itow(i, szKey, 10), pcrValues[i], cszFilename);
+		wchar_t szKey[TEMP_STRING_LENGTH] = { 0 };
+		WritePrivateProfileColour(cszSection, I2WStr(i, szKey, ARRAYSIZE(szKey)), pcrValues[i], cszFilename);
 	}
 }
 
@@ -61,7 +62,7 @@ bool ReadPrivateProfileBool(const wchar_t *cszSection, const wchar_t *cszKey, bo
 {
 	wchar_t szBuf[TEMP_STRING_LENGTH] = {0};
 	if(GetPrivateProfileString(cszSection, cszKey, (bDefault ? L"1" : L"0"), szBuf, TEMP_STRING_LENGTH, cszFilename))
-		return _wtoi(szBuf) == 0 ? false : true;
+		return WStr2I(szBuf) == 0 ? false : true;
 	return bDefault;
 }
 
@@ -70,7 +71,7 @@ float ReadPrivateProfileFloat(const wchar_t *cszSection, const wchar_t *cszKey, 
 {
 	wchar_t szBuf[TEMP_STRING_LENGTH] = {0};
 	if(GetPrivateProfileString(cszSection, cszKey, L"", szBuf, TEMP_STRING_LENGTH, cszFilename))
-		return _wtoi(szBuf) / 99.999990f;
+		return WStr2I(szBuf) / 99.999990f;
 	return fDefault;
 }
 
@@ -87,9 +88,12 @@ int ReadPrivateProfileInt(const wchar_t *cszSection, const wchar_t *cszKey, int 
 
 void ReadPrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsigned int nSize, const wchar_t *cszFilename)
 {
-	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
+
 	for(unsigned int i = 0; i < nSize; i++)
-		pnValues[i] = ReadPrivateProfileInt(cszSection, _itow(i, szKey, 10), 0, -1, 0x7fffffff, cszFilename);
+	{
+	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
+		pnValues[i] = ReadPrivateProfileInt(cszSection, I2WStr(i, szKey, ARRAYSIZE(szKey)), 0, -1, 0x7fffffff, cszFilename);
+	}
 }
 
 // read a colour from a profile and verifies the value
@@ -106,7 +110,10 @@ COLORREF ReadPrivateProfileColour(const wchar_t *cszSection, const wchar_t *cszK
 
 void ReadPrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValues, unsigned int nSize, const wchar_t *cszFilename)
 {
-	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
+
 	for(unsigned int i = 0; i < nSize; i++)
-		pcrValues[i] = ReadPrivateProfileColour(cszSection, _itow(i, szKey, 10), 0, cszFilename);
+	{
+	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
+		pcrValues[i] = ReadPrivateProfileColour(cszSection, I2WStr(i, szKey, ARRAYSIZE(szKey)), 0, cszFilename);
+	}
 }

@@ -2318,11 +2318,9 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				// we force the un-skinned version of the menu
 				// as us being on a different thread doesn't
 				// work with how the gen_ml skinning works
-				TrackPopup(popupmenu, TPM_LEFTALIGN | TPM_LEFTBUTTON |
-						   TPM_TOPALIGN | TPM_RIGHTBUTTON, xPos, yPos, hwnd);
+				TrackPopup(popupmenu, TPM_RIGHTBUTTON, xPos, yPos, hwnd);
 #else
-				TrackPopupMenu(popupmenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_TOPALIGN |
-							   TPM_RIGHTBUTTON, xPos, yPos, 0, hwnd, NULL);
+				TrackPopupMenu(popupmenu, TPM_RIGHTBUTTON, xPos, yPos, 0, hwnd, NULL);
 #endif
 			}
 			return 0;
@@ -2392,9 +2390,9 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 						// we force the un-skinned version of the menu
 						// as us being on a different thread doesn't
 						// work with how the gen_ml skinning works
-						TrackPopup(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, hwnd);
+						TrackPopup(popupmenu, TPM_CENTERALIGN, pt.x, pt.y, hwnd);
 #else
-						TrackPopupMenu(popupmenu, TPM_CENTERALIGN | TPM_TOPALIGN, pt.x, pt.y, 0, hwnd, NULL);
+						TrackPopupMenu(popupmenu, TPM_CENTERALIGN, pt.x, pt.y, 0, hwnd, NULL);
 #endif
 				}
 				return 0;
@@ -2487,58 +2485,58 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
       SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 75));
       SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_SETTICFREQ, (WPARAM)5, 0);
       SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_SETPOS, (WPARAM)true, (LPARAM)falloffrate);
-      SetDlgItemText(hwndDlg, IDC_FALLOFFVAL, _itow(falloffrate, t, 10));
+      SetDlgItemText(hwndDlg, IDC_FALLOFFVAL, I2WStr(falloffrate, t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_PEAKCHANGE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_PEAKCHANGE, TBM_SETTICFREQ, (WPARAM)10, 0);
       SendDlgItemMessage(hwndDlg, IDC_PEAKCHANGE, TBM_SETPOS, (WPARAM)true, (LPARAM)peakchangerate);
-      SetDlgItemText(hwndDlg, IDC_PEAKCHANGEVAL, _itow(peakchangerate, t, 10));
+      SetDlgItemText(hwndDlg, IDC_PEAKCHANGEVAL, I2WStr(peakchangerate, t, ARRAYSIZE(t)));
 
       //SendDlgItemMessage(hwndDlg, IDC_FREQHIGH, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 575));
       //SendDlgItemMessage(hwndDlg, IDC_FREQHIGH, TBM_SETTICFREQ, (WPARAM)10, 0);
       //SendDlgItemMessage(hwndDlg, IDC_FREQHIGH, TBM_SETPOS, (WPARAM)true, (LPARAM)high_freq);
-      //SetDlgItemText(hwndDlg, IDC_FREQHIGHVAL, _itow((int)(high_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FREQHIGHVAL, I2WStr((int)(high_freq * FREQ_SCALE), t, ARRAYSIZE(t)));
 
       //SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 575));
       //SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_SETTICFREQ, (WPARAM)10, 0);
       //SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_SETPOS, (WPARAM)true, (LPARAM)low_freq);
-      //SetDlgItemText(hwndDlg, IDC_FREQLOWVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FREQLOWVAL, I2WStr((int)(low_freq * FREQ_SCALE), t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_BANDWIDTH, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 15));
       SendDlgItemMessage(hwndDlg, IDC_BANDWIDTH, TBM_SETTICFREQ, (WPARAM)1, 0);
       SendDlgItemMessage(hwndDlg, IDC_BANDWIDTH, TBM_SETPOS, (WPARAM)true, (LPARAM)requested_band_width);
-      //SetDlgItemText(hwndDlg, IDC_BANDWIDTHVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_BANDWIDTHVAL, I2WStr((int)(low_freq * FREQ_SCALE), t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_XSPACE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 10));
       SendDlgItemMessage(hwndDlg, IDC_XSPACE, TBM_SETTICFREQ, (WPARAM)1, 0);
       SendDlgItemMessage(hwndDlg, IDC_XSPACE, TBM_SETPOS, (WPARAM)true, (LPARAM)x_spacing);
-      //SetDlgItemText(hwndDlg, IDC_XSPACEVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_XSPACEVAL, I2WStr((int)(low_freq * FREQ_SCALE), t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_YSPACE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 7));
       SendDlgItemMessage(hwndDlg, IDC_YSPACE, TBM_SETTICFREQ, (WPARAM)1, 0);
       SendDlgItemMessage(hwndDlg, IDC_YSPACE, TBM_SETPOS, (WPARAM)true, (LPARAM)y_spacing);
-      //SetDlgItemText(hwndDlg, IDC_YSPACEVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_YSPACEVAL, I2WStr((int)(low_freq * FREQ_SCALE), t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_LATENCY, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 120));
       SendDlgItemMessage(hwndDlg, IDC_LATENCY, TBM_SETTICFREQ, (WPARAM)10, 0);
       SendDlgItemMessage(hwndDlg, IDC_LATENCY, TBM_SETPOS, (WPARAM)true, (LPARAM)AtAnSt_Vis_mod.latencyMs);
-      SetDlgItemText(hwndDlg, IDC_LATENCYVAL, _itow(AtAnSt_Vis_mod.latencyMs, t, 10));
+      SetDlgItemText(hwndDlg, IDC_LATENCYVAL, I2WStr(AtAnSt_Vis_mod.latencyMs, t, ARRAYSIZE(t)));
 
       //SendDlgItemMessage(hwndDlg, IDC_WINHEIGHT, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(8, MAX_WIN_HEIGHT));
       //SendDlgItemMessage(hwndDlg, IDC_WINHEIGHT, TBM_SETTICFREQ, (WPARAM)10, 0);
       //SendDlgItemMessage(hwndDlg, IDC_WINHEIGHT, TBM_SETPOS, (WPARAM)true, (LPARAM)win_height);
-      //SetDlgItemText(hwndDlg, IDC_WINHEIGHTVAL, _itow(win_height, t, 10));
+      //SetDlgItemText(hwndDlg, IDC_WINHEIGHTVAL, I2WStr(win_height, t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_FFTENVELOPE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 500));
       SendDlgItemMessage(hwndDlg, IDC_FFTENVELOPE, TBM_SETTICFREQ, (WPARAM)10, 0);
       SendDlgItemMessage(hwndDlg, IDC_FFTENVELOPE, TBM_SETPOS, (WPARAM)true, (LPARAM)(int)(fFftEnvelope * 100.0001));
-      //SetDlgItemText(hwndDlg, IDC_FFTENVELOPEVAL, _itow((int)(fFftEnvelope * 100.0001), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FFTENVELOPEVAL, I2WStr((int)(fFftEnvelope * 100.0001), t, ARRAYSIZE(t)));
 	  SetDlgItemFloatText(hwndDlg, IDC_FFTENVELOPEVAL, fFftEnvelope);
 
       SendDlgItemMessage(hwndDlg, IDC_FFTSCALE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 250));
       SendDlgItemMessage(hwndDlg, IDC_FFTSCALE, TBM_SETTICFREQ, (WPARAM)10, 0);
       SendDlgItemMessage(hwndDlg, IDC_FFTSCALE, TBM_SETPOS, (WPARAM)true, (LPARAM)(int)(fFftScale * 10.0001));
-      //SetDlgItemText(hwndDlg, IDC_FFTSCALEVAL, _itow((int)(fFftScale * 10.001), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FFTSCALEVAL, I2WStr((int)(fFftScale * 10.001), t, ARRAYSIZE(t)));
   	  SetDlgItemFloatText(hwndDlg, IDC_FFTSCALEVAL, fFftScale);
 
 
@@ -2558,17 +2556,17 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
       return true;
     case WM_HSCROLL:
       falloffrate = (int)SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_GETPOS, 0, 0);
-      SetDlgItemText(hwndDlg, IDC_FALLOFFVAL, _itow(falloffrate, t, 10));
+      SetDlgItemText(hwndDlg, IDC_FALLOFFVAL, I2WStr(falloffrate, t, ARRAYSIZE(t)));
 
       AtAnSt_Vis_mod.latencyMs = (int)SendDlgItemMessage(hwndDlg, IDC_LATENCY, TBM_GETPOS, 0, 0);
-      SetDlgItemText(hwndDlg, IDC_LATENCYVAL, _itow(AtAnSt_Vis_mod.latencyMs, t, 10));
+      SetDlgItemText(hwndDlg, IDC_LATENCYVAL, I2WStr(AtAnSt_Vis_mod.latencyMs, t, ARRAYSIZE(t)));
 
       fFftEnvelope = (float)SendDlgItemMessage(hwndDlg, IDC_FFTENVELOPE, TBM_GETPOS, 0, 0) / 99.9990f;
-      //SetDlgItemText(hwndDlg, IDC_FFTENVELOPEVAL, _itow((int)(fFftEnvelope * 100.0001), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FFTENVELOPEVAL, I2WStr((int)(fFftEnvelope * 100.0001), t, ARRAYSIZE(t)));
 	  SetDlgItemFloatText(hwndDlg, IDC_FFTENVELOPEVAL, fFftEnvelope);
 
       fFftScale = (float)SendDlgItemMessage(hwndDlg, IDC_FFTSCALE, TBM_GETPOS, 0, 0) / 9.9990f;
-      //SetDlgItemText(hwndDlg, IDC_FFTSCALEVAL, _itow((int)(fFftScale * 10.001), t, 10));
+      //SetDlgItemText(hwndDlg, IDC_FFTSCALEVAL, I2WStr((int)(fFftScale * 10.001), t, ARRAYSIZE(t)));
   	  SetDlgItemFloatText(hwndDlg, IDC_FFTSCALEVAL, fFftScale);
 
       requested_band_width = (int)SendDlgItemMessage(hwndDlg, IDC_BANDWIDTH, TBM_GETPOS, 0, 0);
@@ -2582,7 +2580,7 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
             high_freq = low_freq + 1;
             SendDlgItemMessage(hwndDlg, IDC_FREQHIGH, TBM_SETPOS, (WPARAM)true, (LPARAM)high_freq);
           }
-          SetDlgItemText(hwndDlg, IDC_FREQHIGHVAL, _itow((int)(high_freq * FREQ_SCALE), t, 10));
+          SetDlgItemText(hwndDlg, IDC_FREQHIGHVAL, I2WStr((int)(high_freq * FREQ_SCALE), t, ARRAYSIZE(t)));
           break;
         case IDC_FREQLOW:
           /*low_freq = (int)SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_GETPOS, 0, 0);
@@ -2590,18 +2588,18 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
             low_freq = high_freq - 1;
             SendDlgItemMessage(hwndDlg, IDC_FREQLOW, TBM_SETPOS, (WPARAM)true, (LPARAM)low_freq);
           }
-          SetDlgItemText(hwndDlg, IDC_FREQLOWVAL, _itow((int)(low_freq * FREQ_SCALE), t, 10));
+          SetDlgItemText(hwndDlg, IDC_FREQLOWVAL, I2WStr((int)(low_freq * FREQ_SCALE), t, ARRAYSIZE(t)));
           break;*/
         case IDC_PEAKCHANGE:
           peakchangerate = (int)SendDlgItemMessage(hwndDlg, IDC_PEAKCHANGE, TBM_GETPOS, 0, 0);
-          SetDlgItemText(hwndDlg, IDC_PEAKCHANGEVAL, _itow(peakchangerate, t, 10));
+          SetDlgItemText(hwndDlg, IDC_PEAKCHANGEVAL, I2WStr(peakchangerate, t, ARRAYSIZE(t)));
           for(i = 0; i < bands; i++)
             if(peakchange[i] > peakchangerate)
               peakchange[i] = peakchangerate;
           break;
         /*case IDC_WINHEIGHT:
           //win_height = (int)SendDlgItemMessage(hwndDlg, IDC_WINHEIGHT, TBM_GETPOS, (WPARAM)true, (LPARAM)win_height);
-          //SetDlgItemText(hwndDlg, IDC_WINHEIGHTVAL, _itow(win_height, t, 10));
+          //SetDlgItemText(hwndDlg, IDC_WINHEIGHTVAL, I2WStr(win_height, t, ARRAYSIZE(t)));
           //GetWindowRect(hatan,&r);
           //SetWindowPos(hatan, GetParent(hatan), 0, 0, win_width, win_height, SWP_NOACTIVATE | SWP_NOMOVE);
           //RedrawWindow(hatan, NULL, NULL, RDW_INVALIDATE);  // force complete redraw
@@ -3175,23 +3173,23 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 
       SendDlgItemMessage(hwndDlg, IDC_LEFTSELECT, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_LEFTSELECT, TBM_SETPOS, (WPARAM)true, 255 - left);
-      SetDlgItemText(hwndDlg, IDC_LEFTVAL, _itow(left, t, 10));
+      SetDlgItemText(hwndDlg, IDC_LEFTVAL, I2WStr(left, t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_RIGHTSELECT, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_RIGHTSELECT, TBM_SETPOS, (WPARAM)true, 255 - right);
-      SetDlgItemText(hwndDlg, IDC_RIGHTVAL, _itow(right, t, 10));
+      SetDlgItemText(hwndDlg, IDC_RIGHTVAL, I2WStr(right, t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETPOS, (WPARAM)true, GetBValue(current_colour));
-      SetDlgItemText(hwndDlg, IDC_REDVAL, _itow(GetBValue(current_colour), t, 10));
+      SetDlgItemText(hwndDlg, IDC_REDVAL, I2WStr(GetBValue(current_colour), t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_SETPOS, (WPARAM)true, GetGValue(current_colour));
-      SetDlgItemText(hwndDlg, IDC_GREENVAL, _itow(GetGValue(current_colour), t, 10));
+      SetDlgItemText(hwndDlg, IDC_GREENVAL, I2WStr(GetGValue(current_colour), t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
       SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_SETPOS, (WPARAM)true, GetRValue(current_colour));
-      SetDlgItemText(hwndDlg, IDC_BLUEVAL, _itow(GetRValue(current_colour), t, 10));
+      SetDlgItemText(hwndDlg, IDC_BLUEVAL, I2WStr(GetRValue(current_colour), t, ARRAYSIZE(t)));
       DrawSolidColour(hwndDlg, current_colour, IDC_BITMAP_CURCOLOUR);  // draw the colour box
 
       // resize the Left & Right select track bars so the bar = exactly 255
@@ -3222,7 +3220,7 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
       r.right = p.x;
       r.bottom = p.y;
       MoveWindow(GetDlgItem(hwndDlg, IDC_RIGHTSELECT), r.left, r.top, r.right - r.left, 274, true);
-      //MessageBox(hwndDlg,_itow(r.bottom-r.top,t,10),"Uh Oh",MB_OK);
+      //MessageBox(hwndDlg,I2WStr(r.bottom-r.top,t,ARRAYSIZE(t)),"Uh Oh",MB_OK);
 
       // check off the defaults
       if(colour_table == PeakColour)
@@ -3249,14 +3247,14 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 UpdateControls:
       DrawColourRamp(hwndDlg, colour_table);  // draw the ramp
 
-      SetDlgItemText(hwndDlg, IDC_LEFTRVAL, _itow(GetBValue(colour_table[left]), t, 10));
-      SetDlgItemText(hwndDlg, IDC_LEFTGVAL, _itow(GetGValue(colour_table[left]), t, 10));
-      SetDlgItemText(hwndDlg, IDC_LEFTBVAL, _itow(GetRValue(colour_table[left]), t, 10));
+      SetDlgItemText(hwndDlg, IDC_LEFTRVAL, I2WStr(GetBValue(colour_table[left]), t, ARRAYSIZE(t)));
+      SetDlgItemText(hwndDlg, IDC_LEFTGVAL, I2WStr(GetGValue(colour_table[left]), t, ARRAYSIZE(t)));
+      SetDlgItemText(hwndDlg, IDC_LEFTBVAL, I2WStr(GetRValue(colour_table[left]), t, ARRAYSIZE(t)));
       DrawSolidColour(hwndDlg, colour_table[left], IDC_BITMAP_LEFT);  // draw the colour box
 
-      SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, _itow(GetBValue(colour_table[right]), t, 10));
-      SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, _itow(GetGValue(colour_table[right]), t, 10));
-      SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, _itow(GetRValue(colour_table[right]), t, 10));
+      SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, I2WStr(GetBValue(colour_table[right]), t, ARRAYSIZE(t)));
+      SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, I2WStr(GetGValue(colour_table[right]), t, ARRAYSIZE(t)));
+      SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, I2WStr(GetRValue(colour_table[right]), t, ARRAYSIZE(t)));
       DrawSolidColour(hwndDlg, colour_table[right], IDC_BITMAP_RIGHT);  // draw the colour box
 
       // draw the colour box for the border colour
@@ -3287,9 +3285,9 @@ UpdateControls:
             SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_GETPOS, 0, 0),
             SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_GETPOS, 0, 0));
 
-          SetDlgItemText(hwndDlg, IDC_REDVAL, _itow(GetBValue(current_colour), t, 10));
-          SetDlgItemText(hwndDlg, IDC_GREENVAL, _itow(GetGValue(current_colour), t, 10));
-          SetDlgItemText(hwndDlg, IDC_BLUEVAL, _itow(GetRValue(current_colour), t, 10));
+          SetDlgItemText(hwndDlg, IDC_REDVAL, I2WStr(GetBValue(current_colour), t, ARRAYSIZE(t)));
+          SetDlgItemText(hwndDlg, IDC_GREENVAL, I2WStr(GetGValue(current_colour), t, ARRAYSIZE(t)));
+          SetDlgItemText(hwndDlg, IDC_BLUEVAL, I2WStr(GetRValue(current_colour), t, ARRAYSIZE(t)));
           DrawSolidColour(hwndDlg, current_colour, IDC_BITMAP_CURCOLOUR);  // draw the colour box
           return true;
       }
@@ -3298,18 +3296,18 @@ UpdateControls:
       switch(GetDlgCtrlID((HWND)lParam)) {
         case IDC_LEFTSELECT:
           left = 255 - (int)SendDlgItemMessage(hwndDlg, IDC_LEFTSELECT, TBM_GETPOS, 0, 0);
-          SetDlgItemText(hwndDlg, IDC_LEFTVAL, _itow(left, t, 10));
-          SetDlgItemText(hwndDlg, IDC_LEFTRVAL, _itow(GetBValue(colour_table[left]), t, 10));
-          SetDlgItemText(hwndDlg, IDC_LEFTGVAL, _itow(GetGValue(colour_table[left]), t, 10));
-          SetDlgItemText(hwndDlg, IDC_LEFTBVAL, _itow(GetRValue(colour_table[left]), t, 10));
+          SetDlgItemText(hwndDlg, IDC_LEFTVAL, I2WStr(left, t, ARRAYSIZE(t)));
+          SetDlgItemText(hwndDlg, IDC_LEFTRVAL, I2WStr(GetBValue(colour_table[left]), t, ARRAYSIZE(t)));
+          SetDlgItemText(hwndDlg, IDC_LEFTGVAL, I2WStr(GetGValue(colour_table[left]), t, ARRAYSIZE(t)));
+          SetDlgItemText(hwndDlg, IDC_LEFTBVAL, I2WStr(GetRValue(colour_table[left]), t, ARRAYSIZE(t)));
           DrawSolidColour(hwndDlg, colour_table[left], IDC_BITMAP_LEFT);  // draw the colour box
           return true;
         case IDC_RIGHTSELECT:
           right = 255 - (int)SendDlgItemMessage(hwndDlg, IDC_RIGHTSELECT, TBM_GETPOS, 0, 0);
-          SetDlgItemText(hwndDlg, IDC_RIGHTVAL, _itow(right, t, 10));
-          SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, _itow(GetBValue(colour_table[right]), t, 10));
-          SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, _itow(GetGValue(colour_table[right]), t, 10));
-          SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, _itow(GetRValue(colour_table[right]), t, 10));
+          SetDlgItemText(hwndDlg, IDC_RIGHTVAL, I2WStr(right, t, ARRAYSIZE(t)));
+          SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, I2WStr(GetBValue(colour_table[right]), t, ARRAYSIZE(t)));
+          SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, I2WStr(GetGValue(colour_table[right]), t, ARRAYSIZE(t)));
+          SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, I2WStr(GetRValue(colour_table[right]), t, ARRAYSIZE(t)));
           DrawSolidColour(hwndDlg, colour_table[right], IDC_BITMAP_RIGHT);  // draw the colour box
           return true;
       }
@@ -3365,13 +3363,13 @@ UpdateControls:
                 // if a colour was chosen, fix it and update the display
                 current_colour = FixCOLORREF(colour.rgbResult);
                 SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETPOS, (WPARAM)true, GetBValue(current_colour));
-                SetDlgItemText(hwndDlg, IDC_REDVAL, _itow(GetBValue(current_colour), t, 10));
+                SetDlgItemText(hwndDlg, IDC_REDVAL, I2WStr(GetBValue(current_colour), t, ARRAYSIZE(t)));
 
                 SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_SETPOS, (WPARAM)true, GetGValue(current_colour));
-                SetDlgItemText(hwndDlg, IDC_GREENVAL, _itow(GetGValue(current_colour), t, 10));
+                SetDlgItemText(hwndDlg, IDC_GREENVAL, I2WStr(GetGValue(current_colour), t, ARRAYSIZE(t)));
 
                 SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_SETPOS, (WPARAM)true, GetRValue(current_colour));
-                SetDlgItemText(hwndDlg, IDC_BLUEVAL, _itow(GetRValue(current_colour), t, 10));
+                SetDlgItemText(hwndDlg, IDC_BLUEVAL, I2WStr(GetRValue(current_colour), t, ARRAYSIZE(t)));
                 DrawSolidColour(hwndDlg, current_colour, IDC_BITMAP_CURCOLOUR);  // draw the colour box
               }
               return true;
@@ -3398,14 +3396,14 @@ UpdateControls:
 						EraseWindow();
                   break;
               }
-              SetDlgItemText(hwndDlg, IDC_LEFTRVAL, _itow(GetBValue(colour_table[left]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_LEFTGVAL, _itow(GetGValue(colour_table[left]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_LEFTBVAL, _itow(GetRValue(colour_table[left]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_LEFTRVAL, I2WStr(GetBValue(colour_table[left]), t, ARRAYSIZE(t)));
+              SetDlgItemText(hwndDlg, IDC_LEFTGVAL, I2WStr(GetGValue(colour_table[left]), t, ARRAYSIZE(t)));
+              SetDlgItemText(hwndDlg, IDC_LEFTBVAL, I2WStr(GetRValue(colour_table[left]), t, ARRAYSIZE(t)));
               DrawSolidColour(hwndDlg, colour_table[left], IDC_BITMAP_LEFT);  // draw the colour box
 
-              SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, _itow(GetBValue(colour_table[right]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, _itow(GetGValue(colour_table[right]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, _itow(GetRValue(colour_table[right]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, I2WStr(GetBValue(colour_table[right]), t, ARRAYSIZE(t)));
+              SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, I2WStr(GetGValue(colour_table[right]), t, ARRAYSIZE(t)));
+              SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, I2WStr(GetRValue(colour_table[right]), t, ARRAYSIZE(t)));
               DrawSolidColour(hwndDlg, colour_table[right], IDC_BITMAP_RIGHT);  // draw the colour box
 
               DrawColourRamp(hwndDlg, colour_table);  // draw the ramp
@@ -3426,13 +3424,13 @@ UpdateControls:
                   break;
               }
               SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETPOS, (WPARAM)true, GetBValue(current_colour));
-              SetDlgItemText(hwndDlg, IDC_REDVAL, _itow(GetBValue(current_colour), t, 10));
+              SetDlgItemText(hwndDlg, IDC_REDVAL, I2WStr(GetBValue(current_colour), t, ARRAYSIZE(t)));
 
               SendDlgItemMessage(hwndDlg, IDC_GREEN, TBM_SETPOS, (WPARAM)true, GetGValue(current_colour));
-              SetDlgItemText(hwndDlg, IDC_GREENVAL, _itow(GetGValue(current_colour), t, 10));
+              SetDlgItemText(hwndDlg, IDC_GREENVAL, I2WStr(GetGValue(current_colour), t, ARRAYSIZE(t)));
 
               SendDlgItemMessage(hwndDlg, IDC_BLUE, TBM_SETPOS, (WPARAM)true, GetRValue(current_colour));
-              SetDlgItemText(hwndDlg, IDC_BLUEVAL, _itow(GetRValue(current_colour), t, 10));
+              SetDlgItemText(hwndDlg, IDC_BLUEVAL, I2WStr(GetRValue(current_colour), t, ARRAYSIZE(t)));
               DrawSolidColour(hwndDlg, current_colour, IDC_BITMAP_CURCOLOUR);  // draw the colour box
               return true;
             case IDC_FREQBARS:  // fall through
@@ -3451,14 +3449,14 @@ UpdateControls:
               }
               DrawColourRamp(hwndDlg, colour_table);  // draw the ramp
 
-              SetDlgItemText(hwndDlg, IDC_LEFTRVAL, _itow(GetBValue(colour_table[left]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_LEFTGVAL, _itow(GetGValue(colour_table[left]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_LEFTBVAL, _itow(GetRValue(colour_table[left]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_LEFTRVAL, I2WStr(GetBValue(colour_table[left]), t, ARRAYSIZE(t)));
+              SetDlgItemText(hwndDlg, IDC_LEFTGVAL, I2WStr(GetGValue(colour_table[left]), t, ARRAYSIZE(t)));
+              SetDlgItemText(hwndDlg, IDC_LEFTBVAL, I2WStr(GetRValue(colour_table[left]), t, ARRAYSIZE(t)));
               DrawSolidColour(hwndDlg, colour_table[left], IDC_BITMAP_LEFT);  // draw the colour box
 
-              SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, _itow(GetBValue(colour_table[right]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, _itow(GetGValue(colour_table[right]), t, 10));
-              SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, _itow(GetRValue(colour_table[right]), t, 10));
+              SetDlgItemText(hwndDlg, IDC_RIGHTRVAL, I2WStr(GetBValue(colour_table[right]), t, ARRAYSIZE(t)));
+              SetDlgItemText(hwndDlg, IDC_RIGHTGVAL, I2WStr(GetGValue(colour_table[right]), t, ARRAYSIZE(t)));
+              SetDlgItemText(hwndDlg, IDC_RIGHTBVAL, I2WStr(GetRValue(colour_table[right]), t, ARRAYSIZE(t)));
               DrawSolidColour(hwndDlg, colour_table[right], IDC_BITMAP_RIGHT);  // draw the colour box
               return true;
             }
