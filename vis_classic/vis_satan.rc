@@ -63,7 +63,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 IDD_ANALYZER DIALOGEX 0, 0, 244, 212
 STYLE DS_SETFONT | DS_MODALFRAME | DS_3DLOOK | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
 CAPTION "Analyser"
-FONT 8, "MS Sans Serif", 0, 0, 0x0
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     GROUPBOX        "Motion",IDC_GROUPBOX9,0,0,244,64,WS_GROUP
     LTEXT           "Frequency Bar Fall-off:",IDC_STATICTEXT1,8,8,76,9,NOT WS_GROUP
@@ -102,7 +102,7 @@ END
 IDD_COLOUR DIALOGEX 0, 0, 244, 212
 STYLE DS_SETFONT | DS_3DLOOK | WS_CHILD | WS_VISIBLE | WS_CAPTION
 CAPTION "Colour Factory"
-FONT 8, "MS Sans Serif", 0, 0, 0x0
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     LTEXT           "888",IDC_LEFTVAL,44,4,20,10,NOT WS_GROUP
     LTEXT           "888",IDC_RIGHTVAL,76,4,20,10,NOT WS_GROUP
@@ -150,7 +150,7 @@ END
 IDD_FUNCTION DIALOGEX 0, 0, 240, 212
 STYLE DS_SETFONT | DS_3DLOOK | WS_CHILD | WS_VISIBLE | WS_CAPTION
 CAPTION "Flash Function"
-FONT 8, "MS Sans Serif", 0, 0, 0x0
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     CONTROL         "Level Graph",IDC_LEVELGRAPH,"Static",SS_BITMAP | SS_REALSIZEIMAGE | SS_SUNKEN,4,34,19,17
     GROUPBOX        "Function",IDC_FUNCTIONGROUP,184,32,52,178,WS_GROUP
@@ -172,7 +172,7 @@ END
 IDD_STYLE DIALOGEX 0, 0, 244, 212
 STYLE DS_SETFONT | DS_3DLOOK | WS_CHILD | WS_VISIBLE | WS_CAPTION
 CAPTION "Style"
-FONT 8, "MS Sans Serif", 0, 0, 0x0
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     GROUPBOX        "Frequency Bars",IDC_BARSTYLE,4,4,72,100,WS_GROUP
     CONTROL         "Classic",IDC_CLASSIC,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,12,20,56,8
@@ -216,7 +216,7 @@ IDD_SAVEOPTIONS DIALOGEX 0, 0, 203, 108
 STYLE DS_SETFONT | DS_MODALFRAME | DS_3DLOOK | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
 EXSTYLE WS_EX_DLGMODALFRAME
 CAPTION "Profiles"
-FONT 8, "MS Sans Serif", 0, 0, 0x1
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     COMBOBOX        IDC_COMBOPROFILE,8,4,136,100,CBS_SIMPLE | CBS_SORT | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      "Load",IDC_LOAD,152,4,44,17,BS_CENTER
@@ -228,7 +228,7 @@ END
 IDD_PROFILESELECT DIALOGEX 0, 0, 240, 212
 STYLE DS_SETFONT | DS_3DLOOK | WS_CHILD | WS_VISIBLE | WS_CAPTION
 CAPTION "Profiles"
-FONT 8, "MS Sans Serif", 0, 0, 0x0
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     LTEXT           "Saved Profiles",IDC_STATICTEXT1B,48,4,112,8,NOT WS_GROUP
     LISTBOX         IDC_PROFILELIST,48,16,136,140,LBS_SORT | WS_VSCROLL | WS_TABSTOP
@@ -262,8 +262,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,1,1,0
- PRODUCTVERSION 2,1,1,0
+ FILEVERSION 2,1,4,0
+ PRODUCTVERSION 2,1,4,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -278,14 +278,14 @@ BEGIN
     BEGIN
         BLOCK "080904b0"
         BEGIN
-            VALUE "CompanyName", "WACUP (WinAmp Community Update Project)"
+            VALUE "CompanyName", "WACUP"
             VALUE "FileDescription", "Winamp Visualization Plug-in"
-            VALUE "FileVersion", "2.1.1.0"
+            VALUE "FileVersion", "2.1.4.0"
             VALUE "InternalName", "Classic Spectrum Analyser"
-            VALUE "LegalCopyright", "Copyright © 1998-2019 Mike Lynch. Modifications by Darren Owen aka DrO © 2018-2022"
+            VALUE "LegalCopyright", "Copyright © 1998-2019 Mike Lynch. Modifications by Darren Owen aka DrO © 2018-2023"
             VALUE "OriginalFilename", "vis_classic.dll"
             VALUE "ProductName", "Classic Spectrum Analyser"
-            VALUE "ProductVersion", "2.1.1.0"
+            VALUE "ProductVersion", "2.1.4.0"
         END
     END
     BLOCK "VarFileInfo"

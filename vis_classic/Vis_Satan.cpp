@@ -60,7 +60,6 @@ TODO: faster file saving would be nice
 #include <loader/loader/paths.h>
 #endif
 
-#include <Winamp/wa_ipc.h>
 #include <Winamp/vis.h>
 #include "..\FFTNullsoft\fft.h"
 #include "..\random\MersenneTwisterPk\PkRandom.h"
@@ -74,6 +73,8 @@ TODO: faster file saving would be nice
 #include "PeakColour.h"
 #include "resource.h"
 #include "api.h"
+
+#include <../wacup_version.h>
 
 // this is used to identify the skinned frame to allow for embedding/control by modern skins if needed
 // note: this is taken from vis_milk2 so that by having a GUID on the window, the embedding of ths vis
@@ -185,9 +186,8 @@ const wchar_t *cszDefaultProfileMessage = L"Click on a profile to load it (any c
 const int cnProfileNameBufLen = MAX_PROFILE_NAME_LENGTH + 1;
 
 api_service* WASABI_API_SVC = NULL;
-api_language* WASABI_API_LNG = NULL;
-HINSTANCE WASABI_API_LNG_HINST = 0,
-		  WASABI_API_ORIG_HINST = 0;
+
+SETUP_API_LNG_VARS;
 
 winampVisModule AtAnSt_Vis_mod = {
 	CS_MODULE_TITLE,
@@ -307,6 +307,15 @@ void ConfigStereo(winampVisModule * /*this_mod*/)
 	}
 }
 
+int CALLBACK PropSheetProc(HWND hwndDlg, UINT uMsg, LPARAM lParam)
+{
+    if (uMsg == PSCB_INITIALIZED)
+    {
+        DarkModeSetup(hwndDlg);
+    }
+    return 0;
+}
+
 // Config for Stereo Classic Analyzer
 void OpenConfigStereoWindow()
 {
@@ -360,7 +369,8 @@ void OpenConfigStereoWindow()
 		page[4].pfnDlgProc  = (DLGPROC) ProfileSelectDialogProc;
 
 		psh.dwSize        = sizeof (PROPSHEETHEADER);
-		psh.dwFlags       = PSH_NOAPPLYNOW | PSH_PROPTITLE | PSH_PROPSHEETPAGE | PSH_NOCONTEXTHELP;
+		psh.dwFlags       = PSH_NOAPPLYNOW | PSH_PROPTITLE | PSH_PROPSHEETPAGE |
+                                             PSH_NOCONTEXTHELP | PSH_USECALLBACK;
 		psh.hInstance     = WASABI_API_LNG_HINST;
 		psh.hwndParent    = AtAnSt_Vis_mod.hwndParent;
 
@@ -369,13 +379,14 @@ void OpenConfigStereoWindow()
 		psh.nStartPage    = 0;
 		psh.nPages        = 5;
 		psh.ppsp          = page;
+        psh.pfnCallback = PropSheetProc;
 
 		if(IsWindow(hatan)) {
 			psh.dwFlags = psh.dwFlags | PSH_MODELESS;
 			psh.hwndParent = hatan;
-			config_win = (HWND)PropertySheet(&psh);
+			config_win = (HWND)CreatePropSheets(&psh);
 		} else {
-			if(PropertySheet(&psh) == 1)
+			if(CreatePropSheets(&psh) == 1)
 				SaveTempCurrentSettings();
 			hwndCurrentConfigProperty = NULL;
 		}
@@ -2480,6 +2491,7 @@ BOOL CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 		hwndCurrentConfigProperty = hwndDlg;
 	case WM_UPDATE_PROFILE_LIST:
     case WM_INITDIALOG:
+      DarkModeSetup(hwndDlg);
       //if(!IsWindow(config_win))
         //config_win = hwndDlg;
       SendDlgItemMessage(hwndDlg, IDC_FALLOFF, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(1, 75));
@@ -2660,7 +2672,7 @@ BOOL CALLBACK LevelDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
     case WM_INITDIALOG: {
       //if(!IsWindow(config_win))
         //config_win = hwndDlg;
-
+      DarkModeSetup(hwndDlg);
       // create a bitmap to be displayed in the window
       HDC hdcScreen = GetDC(NULL);
       HBITMAP bitmap = CreateCompatibleBitmap(hdcScreen, 256, 256);
@@ -2832,7 +2844,7 @@ BOOL CALLBACK StyleDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPa
     case WM_INITDIALOG: {
       //if(!IsWindow(config_win))
         //config_win = hwndDlg;
-
+      DarkModeSetup(hwndDlg);
       // set Background style
       switch(backgrounddraw) {
         case BACKGROUND_FLASH:
@@ -3155,7 +3167,7 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
     case WM_INITDIALOG: {
       //if(!IsWindow(config_win))
         //config_win = hwndDlg;
-
+      DarkModeSetup(hwndDlg);
       LoadUserColours();
       // create bitmaps to be displayed in the window
       HDC hdcScreen = GetDC(NULL);
@@ -3502,6 +3514,7 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
 
   switch(uMsg) {
     case WM_INITDIALOG: {
+      DarkModeSetup(hwndDlg);
       // restrict maximum name length
       SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_LIMITTEXT, cnProfileNameBufLen - 1, 0);
 	  // set the text
@@ -3608,6 +3621,7 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
 			return TRUE;
 		hwndCurrentConfigProperty = hwndDlg;
 	case WM_INITDIALOG:
+        DarkModeSetup(hwndDlg);
 	case WM_UPDATE_PROFILE_LIST:
 		SetDlgItemText(hwndDlg, IDC_STATICMESSAGE, szProfileMessage[0] ? szProfileMessage : cszDefaultProfileMessage);
 		SendDlgItemMessage(hwndDlg, IDC_PROFILELIST, LB_RESETCONTENT, 0, 0);
@@ -4185,9 +4199,10 @@ void AboutMessage(void)
 #ifdef WACUP_BUILD
 	// TODO localise
 	wchar_t message[1024] = {0};
-	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer plug-in originally\n"
-			   L"by Mike Lynch (Copyright © 2007-2018)\n\nUpdated by Darren Owen aka DrO for\n"
-			   L"WACUP (Copyright © 2018-2022)\n\nhttps://github.com/WACUP/vis_classic\n\n"
+	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer "
+               L"plug-in originally\nby Mike Lynch (Copyright © 2007-2018)\n\n"
+               L"Updated by Darren Owen aka DrO for\nWACUP (Copyright © 2018-"
+               WACUP_COPYRIGHT L")\n\nhttps://github.com/WACUP/vis_classic\n\n"
 			   L"Build date: %s", TEXT(__DATE__));
 	AboutMessageBox(hatan, message, L"Classic Spectrum Analyzer");
 #else
