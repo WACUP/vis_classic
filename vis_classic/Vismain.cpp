@@ -62,9 +62,5 @@ __declspec( dllexport ) winampVisHeader *winampVisGetHeader(HWND hwndParent)
 // otherwise returns either mod1 or mod2 depending on 'which'.
 winampVisModule *getModule(int which)
 {
-	switch(which)
-	{
-    case 0: return &AtAnSt_Vis_mod;
-	default: return NULL;
-	}
+	return (!which ? &AtAnSt_Vis_mod : NULL);
 }

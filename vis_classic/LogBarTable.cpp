@@ -5,10 +5,8 @@
 // fDiv - divisor
 int AssignCount(int nNotAssigned, double fDiv)
 {
-	int nAssign = (int)(nNotAssigned - nNotAssigned / fDiv + 0.5);
-	if(nAssign <= 0)
-		nAssign = 1;
-	return nAssign;
+	const int nAssign = (int)(nNotAssigned - nNotAssigned / fDiv + 0.5);
+	return ((nAssign <= 0) ? 1 : nAssign);
 }
 
 // make logarithmic table, or real close to it
@@ -17,7 +15,7 @@ int AssignCount(int nNotAssigned, double fDiv)
 // nLastBarCutHz - cut off frequency for last bar
 // nBars - number of bars
 // pnBarTable - bars array, each element will have a count of the number of FFT elements to use
-void LogBarValueTable(unsigned int nFftSize, unsigned int nSampleRate, unsigned int nLastBarCutHz, unsigned int nBars, unsigned int *pnBarTable)
+void LogBarValueTable(const unsigned int nFftSize, const unsigned int nSampleRate, const unsigned int nLastBarCutHz, const unsigned int nBars, unsigned int *pnBarTable)
 {
 	// pre-assign each bar to draw with at least 1 element from the spec data
 	for(unsigned int i = 0; i < nBars; i++)
@@ -34,7 +32,7 @@ void LogBarValueTable(unsigned int nFftSize, unsigned int nSampleRate, unsigned 
 		
 	// now assign the rest of the spec data bars to the bars to draw
 	// get the <number of spectrum bars> root of the remaining bins to assign
-	double fDiv = pow(nNotAssigned, 1.0f / (double)nBars);
+	const double fDiv = pow(nNotAssigned, 1.0f / (double)nBars);
 		
 	if(nLastBarCutHz > nSampleRate / 10000) {
 		// make last bar cut off at no higher than 16000Hz since not much happens there anyway

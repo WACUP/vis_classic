@@ -1,4 +1,4 @@
-#define PLUGIN_VERSION " v2.1.4"
+#define PLUGIN_VERSION " v2.1.6"
 #ifndef _WIN64
 #define CS_MODULE_TITLE "Classic Spectrum Analyzer" PLUGIN_VERSION
 #else
@@ -74,7 +74,7 @@ void PeakLevelRiseFall();
 void PeakLevelSparks();
 
 void ClearBackground();
-void DrawLevelGraph(HWND, int *);
+void DrawLevelGraph(HWND, const int *);
 void DrawColourRamp(HWND, COLORREF *);
 void DrawSolidColour(HWND, COLORREF, int);
 void FadeColours(COLORREF *, int, int);

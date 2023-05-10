@@ -12,7 +12,7 @@ unsigned char BarColourLines(int i, int)
 
 unsigned char BarColourElevator(int i, int y)
 {
-  int high_colour_position = i * i / 255;
+  const int high_colour_position = i * i / 255;
 
   // y correction so bottom colour is not always 0;
   if(y == 0 && (draw_height > 0))
@@ -34,8 +34,10 @@ unsigned char BarColourElevator(int i, int y)
 unsigned char BarColourFire(int i, int y)
 {
   // y correction so bottom colour is not always 0;
-  if(y == 0 && (draw_height > 0))
-   y = 255 / draw_height;
+  if(y == 0 && (draw_height > 0)) {
+    //y = 255 / draw_height;
+    return (unsigned char)((255 / draw_height) * 255 / i);
+  }
 
    return (unsigned char)(y * 255 / i);  // Faded Bars - my fire
 }

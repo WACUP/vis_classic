@@ -54,6 +54,7 @@ TODO: faster file saving would be nice
 #include <malloc.h>
 #include <shlwapi.h>
 #include <stdlib.h>
+#include <random>
 #ifdef WACUP_BUILD
 #include <winamp/wa_cup.h>
 #include <loader/loader/utils.h>
@@ -62,7 +63,6 @@ TODO: faster file saving would be nice
 
 #include <Winamp/vis.h>
 #include "..\FFTNullsoft\fft.h"
-#include "..\random\MersenneTwisterPk\PkRandom.h"
 
 #include "vis_satan.h"
 #include "BarColour.h"
@@ -249,13 +249,13 @@ COLORREF FreqBarColour[256] = {0}, VolumeColour[256] = {0}, PeakColour[256] = {0
 COLORREF UserColours[16] = {0};  // user defined colours for Pick Colour
 BITMAPINFO bmi = {0};
 void (*CalculateVariables)(void) = CalculateVariablesStereo;
-int (*LevelCalcStereo)(int low, int high, unsigned char *spectrumData) = AverageLevelCalcStereo;
-int (*LevelCalcMono)(int low, int high, unsigned char *spectrumDataLeft, unsigned char *spectrumDataRight) = AverageLevelCalcMono;
+int (*LevelCalcStereo)(const int low, const int high, const unsigned char *spectrumData) = AverageLevelCalcStereo;
+int (*LevelCalcMono)(const int low, const int high, const unsigned char *spectrumDataLeft, const unsigned char *spectrumDataRight) = AverageLevelCalcMono;
 void (*BackgroundDraw)(unsigned char) = BackgroundBlack;
 void (*RenderBars)(void) = RenderSingleBars;
 void (*PeakLevelEffect)(void) = PeakLevelNormal;
 unsigned char (*BarColourScheme)(int level, int y) = BarColourClassic;
-unsigned char (*PeakColourScheme)(int level, int y) = PeakColourFade;
+unsigned char (*PeakColourScheme)(const int level, const int y) = PeakColourFade;
 HWND hatan = NULL, config_win = NULL, hwndCurrentConfigProperty = NULL;
 HMENU hmenu = NULL, popupmenu = NULL;
 embedWindowState myWindowState = {0};
@@ -264,7 +264,7 @@ wchar_t szCurrentProfile[MAX_PATH] = {0};
 wchar_t szTempProfile[MAX_PATH] = {0};
 wchar_t szProfileMessage[PROFILE_MESSAGE_STRING_LENGTH] = {0};
 
-Pk::Random32 m_rand;
+std::mt19937 m_rand;
 
 // FFT
 FFT m_fft;
@@ -284,7 +284,7 @@ void FFTInit(unsigned int nNewFft)
 		caSpectrumData[0] = new unsigned char[nFftFrequencies];
 		caSpectrumData[1] = new unsigned char[nFftFrequencies];
 	}
-	m_fft.Init(576, nFftFrequencies, bFftEqualize ? 1 : 0, fFftEnvelope);
+	m_fft.Init(576, nFftFrequencies, bFftEqualize ? 1 : 0, fFftEnvelope, true);
 }
 
 void ConfigStereo(winampVisModule * /*this_mod*/)
@@ -619,7 +619,7 @@ int AtAnStDirectRender(winampVisModule *this_mod)
 			int nHigh = nLow + naBarTable[i];
 			_ASSERT((unsigned int)nLow < nFftFrequencies);
 			_ASSERT((unsigned int)nHigh <= nFftFrequencies);
-			int newlevel = LevelCalcStereo(nLow, nHigh, caSpectrumData[0]);
+            const int newlevel = LevelCalcStereo(nLow, nHigh, caSpectrumData[0]);
 			nLow = nHigh;
 			volume += volume_func[newlevel];
 
@@ -642,7 +642,7 @@ int AtAnStDirectRender(winampVisModule *this_mod)
 			int nHigh = nLow + naBarTable[i];
 			_ASSERT((unsigned int)nLow < nFftFrequencies);
 			_ASSERT((unsigned int)nHigh <= nFftFrequencies);
-			int newlevel = LevelCalcStereo(nLow, nHigh, caSpectrumData[1]);
+            const int newlevel = LevelCalcStereo(nLow, nHigh, caSpectrumData[1]);
 			nLow = nHigh;
 			volume += volume_func[newlevel];
 
@@ -1103,10 +1103,14 @@ void UpdatePeakColourLookup()
     //}
 
     // calculate the colour lookup table for the peaks
-    if(peak_lookup[1])  // check to make sure memory is allocated
-      for(int i = 1; i < 256; i++)
-        for(int y = 0; y <= peak_level_length[i]; y++)
-          peak_lookup[i][y] = PeakColourScheme(peak_level_lookup[i][y], (int)(y * 255.0 / peak_level_length[i]));
+    if(peak_lookup[1]) {  // check to make sure memory is allocated
+      for(int i = 1; i < 256; i++) {
+        const int length = peak_level_length[i];
+        for(int y = 0; y <= length; y++) {
+          peak_lookup[i][y] = PeakColourScheme(peak_level_lookup[i][y], (int)(y * 255.0 / length));
+        }
+      }
+    }
   }
 
   // calculate the colour lookup table for the peaks
@@ -1124,7 +1128,7 @@ void RandomColourLookup()
   // calculate the colour lookup table for the frequncy bars
   if(colour_lookup[1]) {  // check to make sure memory is allocated
     for(int i = 1; i < 256; i++) {
-      switch(m_rand.next() % 5) {
+      switch(m_rand() % 5) {
         case 4:
           Scheme = BarColourElevator;
           break;
@@ -1275,7 +1279,7 @@ void BackgroundFade(unsigned char)
 // for the mirror effect
 void BackgroundFadeMirror(unsigned char)
 {
-  int middle = draw_height / 2 / y_spacing * y_spacing;
+  const int middle = draw_height / 2 / y_spacing * y_spacing;
   //COLORREF colour;
 
   for(int y = 0; y <= draw_height / 2; y += y_spacing) {
@@ -1295,7 +1299,7 @@ void BackgroundFadeMirror(unsigned char)
 // this is for the Reflection style
 void BackgroundFadeReflection(unsigned char)
 {
-  int middle = draw_height / 3 / y_spacing * y_spacing;
+  const int middle = draw_height / 3 / y_spacing * y_spacing;
   COLORREF colour;
 
   // draw top part of background
@@ -1362,7 +1366,7 @@ void BackgroundGrid(unsigned char)
 // this is for the Mirror style
 void BackgroundGridMirror(unsigned char)
 {
-  int middle = draw_height / 2 / y_spacing * y_spacing;
+  const int middle = draw_height / 2 / y_spacing * y_spacing;
 
   for(int y = 0; y <= draw_height / 2; y += y_spacing) {
     // +0.0035 is used to correct for rounding errors
@@ -1382,7 +1386,7 @@ void BackgroundGridMirror(unsigned char)
 // this is for the Reflection style
 void BackgroundGridReflection(unsigned char)
 {
-  int middle = draw_height / 3 / y_spacing * y_spacing;
+  const int middle = draw_height / 3 / y_spacing * y_spacing;
   COLORREF colour;
 
   // draw top part of background
@@ -1492,7 +1496,7 @@ void RenderWideBars()
 
 void RenderSingleBarsMirror()
 {
-  int middle = (draw_height / 2 / y_spacing) * y_spacing;
+  const int middle = (draw_height / 2 / y_spacing) * y_spacing;
   for(int i = 0; i < bands; i++) {
     int x = i * total_width;
     //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
@@ -1574,7 +1578,7 @@ void CalculateDarkMirrorAuxColours(void)
 
 void RenderSingleBarsDarkMirror()
 {
-  int middle = (draw_height / 3 / y_spacing) * y_spacing;
+  const int middle = (draw_height / 3 / y_spacing) * y_spacing;
 
   for(int i = 0; i < bands; i++) {
     int x = i * total_width;
@@ -1596,7 +1600,7 @@ void RenderWideBarsDarkMirror()
 {
   // note that middle is actually 1/3 of the screen.  The dark reflection is in the bottom
   // 1/3 of the screen and the top 2/3 is the full colour bars.
-  int middle = (draw_height / 3 / y_spacing) * y_spacing;
+  const int middle = (draw_height / 3 / y_spacing) * y_spacing;
   COLORREF copycolour, copycolour2;
 
   for(int i = 0; i < bands; i++) {
@@ -1643,9 +1647,9 @@ void RenderSingleBarsWaveyReflection()
 {
   // wavedivisor - overall amplitude of the wave
   //static int waves[18] = {0,0,0,1,2,2,2,2,1,0,0,0,-1,-2,-2,-2,-2,-1};
-  static int waves[16] = {0,0,1,2,2,2,2,1,0,0,-1,-2,-2,-2,-2,-1};
+  static const int waves[16] = {0,0,1,2,2,2,2,1,0,0,-1,-2,-2,-2,-2,-1};
   //static int waves[20] = {0,0,0,1,1,1,1,1,1,1,0,0,0,-1,-1,-1,-1,-1,-1,-1};
-  static int wavechange[4] = {0,18,32,0};
+  static const int wavechange[4] = {0,18,32,0};
   static int wavestart = 2, wavedivisor = 3, oldvolume = 0; //, wavedelay = 0;
   bool draw_y = true;
   int middle = (draw_height / 3 / y_spacing) * y_spacing, volume = 0;
@@ -1701,9 +1705,9 @@ void RenderWideBarsWaveyReflection()
 {
   // note that middle is actually 1/3 of the screen.  The dark reflection is in the bottom
   // 1/3 of the screen and the top 2/3 is the full colour bars.
-  static int waves[16] = {0,0,1,2,2,2,2,1,0,0,-1,-2,-2,-2,-2,-1};
+  static const int waves[16] = {0,0,1,2,2,2,2,1,0,0,-1,-2,-2,-2,-2,-1};
   //static int waves[20] = {0,0,0,1,1,1,1,1,1,1,0,0,0,-1,-1,-1,-1,-1,-1,-1};
-  static int wavechange[4] = {0,18,32,0};
+  static const int wavechange[4] = {0,18,32,0};
   static int wavestart = 2, wavedivisor = 3, oldvolume = 0;
   bool draw_y = true;
   int middle = (draw_height / 3 / y_spacing) * y_spacing, volume = 0;
@@ -1771,9 +1775,9 @@ void RenderWideBarsWaveyReflection()
 
 void CalculateShadowAuxColours(void)
 {
-  unsigned int bgR = GetBValue(VolumeColour[0]);
-  unsigned int bgG = GetGValue(VolumeColour[0]);
-  unsigned int bgB = GetRValue(VolumeColour[0]);
+  const unsigned int bgR = GetBValue(VolumeColour[0]);
+  const unsigned int bgG = GetGValue(VolumeColour[0]);
+  const unsigned int bgB = GetRValue(VolumeColour[0]);
   for(int i = 0; i < 256; i++)
     AuxColour[0][i] = bmpRGB((GetBValue(FreqBarColour[i]) + bgR) / 2, (GetGValue(FreqBarColour[i]) + bgG) / 2, (GetRValue(FreqBarColour[i]) + bgB) / 2);
 }
@@ -1842,13 +1846,13 @@ void RenderWideBarsShadow()
 
 void CalculateFadeShadowAuxColours(void)
 {
-	unsigned int bgR = GetBValue(VolumeColour[0]);
-	unsigned int bgG = GetGValue(VolumeColour[0]);
-	unsigned int bgB = GetRValue(VolumeColour[0]);
+    const unsigned int bgR = GetBValue(VolumeColour[0]);
+    const unsigned int bgG = GetGValue(VolumeColour[0]);
+    const unsigned int bgB = GetRValue(VolumeColour[0]);
 	for(int i = 0; i < 128; i++) {
-		unsigned int r = GetBValue(FreqBarColour[i * 2]);
-		unsigned int g = GetGValue(FreqBarColour[i * 2]);
-		unsigned int b = GetRValue(FreqBarColour[i * 2]);
+        const unsigned int r = GetBValue(FreqBarColour[i * 2]);
+        const unsigned int g = GetGValue(FreqBarColour[i * 2]);
+        const unsigned int b = GetRValue(FreqBarColour[i * 2]);
 		SmallAuxColour[0][i] = bmpRGB((r + bgR * 7) / 8, (g + bgG * 7) / 8, (b + bgB * 7) / 8);
 		SmallAuxColour[1][i] = bmpRGB((r + bgR * 3) / 4, (g + bgG * 3) / 4, (b + bgB * 3) / 4);
 		SmallAuxColour[2][i] = bmpRGB((r * 3 + bgR * 5) / 8, (g * 3 + bgG * 5) / 8, (b * 3 + bgB * 5) / 8);
@@ -1926,9 +1930,9 @@ void RenderWideBarsFadeShadow()
 
 void CalculateDoubleShadowAuxColours(void)
 {
-  unsigned int bgR = GetBValue(VolumeColour[0]);
-  unsigned int bgG = GetGValue(VolumeColour[0]);
-  unsigned int bgB = GetRValue(VolumeColour[0]);
+  const unsigned int bgR = GetBValue(VolumeColour[0]);
+  const unsigned int bgG = GetGValue(VolumeColour[0]);
+  const unsigned int bgB = GetRValue(VolumeColour[0]);
   for(int i = 0; i < 256; i++) {
     //AuxColour[0][i] = bmpRGB(GetBValue(FreqBarColour[i]) / 2.75f, GetGValue(FreqBarColour[i]) / 2.75f, GetRValue(FreqBarColour[i]) / 2.75f);
     //AuxColour[1][i] = bmpRGB(GetBValue(FreqBarColour[i]) / 1.75f, GetGValue(FreqBarColour[i]) / 1.75f, GetRValue(FreqBarColour[i]) / 1.75f);
@@ -2026,9 +2030,9 @@ void RenderWideBarsDoubleShadow()
 
 void CalculateSmokeAuxColours(void)
 {
-	unsigned int bgR = GetBValue(VolumeColour[0]);
-	unsigned int bgG = GetGValue(VolumeColour[0]);
-	unsigned int bgB = GetRValue(VolumeColour[0]);
+    const unsigned int bgR = GetBValue(VolumeColour[0]);
+    const unsigned int bgG = GetGValue(VolumeColour[0]);
+    const unsigned int bgB = GetRValue(VolumeColour[0]);
 	for(int j = 0, i = 0; j < 128; j++, i += 2) {
 		SmallAuxColour[3][j] = bmpRGB((GetBValue(FreqBarColour[i]) + bgR) / 2, (GetGValue(FreqBarColour[i]) + bgG) / 2, (GetRValue(FreqBarColour[i]) + bgB) / 2);
 		SmallAuxColour[2][j] = bmpRGB((GetBValue(FreqBarColour[i]) * 4 + bgR * 5) / 9, (GetGValue(FreqBarColour[i]) * 4 + bgG * 5) / 9, (GetRValue(FreqBarColour[i]) * 4 + bgB * 5) / 9);
@@ -2054,7 +2058,7 @@ void RenderSingleBarsSmoke()
     if(levelbuffer[1][i] < level[i])
       levelbuffer[1][i] = level[i];
     else
-      levelbuffer[1][i] -= m_rand.next() % 4;
+      levelbuffer[1][i] -= m_rand() % 4;
 
     for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing)
       rgbbuffer[y * image_width + x] = SmallAuxColour[levelbuffer[1][i] / 72][colour_lookup[levelbuffer[1][i]][y] / 2];
@@ -2113,7 +2117,7 @@ void RenderWideBarsSmoke()
       if(levelbuffer[1][i] < level[i / band_width])
         levelbuffer[1][i] = level[i / band_width];
       else
-        levelbuffer[1][i] -= m_rand.next() % 4;
+        levelbuffer[1][i] -= m_rand() % 4;
 
       for(y = (int)(level[i / band_width] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing)
         rgbbuffer[y * image_width + tx] = SmallAuxColour[levelbuffer[1][i] / 72][colour_lookup[levelbuffer[1][i]][y] / 2];
@@ -2277,16 +2281,16 @@ void PeakLevelSparks()
 {
   for(int _level = 1; _level < 256; _level++) {
     if(peakchangerate < 200)
-      peak_level_length[_level] = (short)(peakchangerate + (m_rand.next() % 56));
+      peak_level_length[_level] = (short)(peakchangerate + (m_rand() % 56));
       //peak_level_length[_level] = (short)(peakchangerate / 2 + random(peakchangerate / 8 + 25));
     else
       peak_level_length[_level] = (short)(peakchangerate);
 
-    int level_dur = peak_level_length[_level] / 2 + (m_rand.next() % peak_level_length[_level] / 3);
+    int level_dur = peak_level_length[_level] / 2 + (m_rand() % peak_level_length[_level] / 3);
     for(int i = peak_level_length[_level]; i > level_dur; i--)
       peak_level_lookup[_level][i] = (short)(_level);
 
-    int risevalue = (m_rand.next() % 5) + 3;
+    int risevalue = (m_rand() % 5) + 3;
     for(int i = level_dur, rise = risevalue; i >= 0; i--, rise += risevalue) {
       if(_level + rise > 255)
         peak_level_lookup[_level][i] = 0;
@@ -2386,7 +2390,7 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 					// if not being asked about random state, load a random profile
 					if(HIWORD(wParam) != 0xFFFF) {
 						const unsigned int count = CountProfileFiles();
-						LoadProfileNumber((count > 0 ? (m_rand.next() % count) : 0));
+						LoadProfileNumber((count > 0 ? (m_rand() % count) : 0));
 						SaveDialog_UpdateProfilesProperty();
 					}
 				}
@@ -3343,9 +3347,9 @@ UpdateControls:
             case IDC_GUESSBORDER: {
               /*RECT r;
               GetClientRect(GetParent(hatan), &r);
-              int y = r.bottom / 4 + (m_rand.next() % r.bottom/2);
+              int y = r.bottom / 4 + (m_rand() % r.bottom/2);
               HDC dc = GetDC(GetParent(hatan));
-              /*if(m_rand.next() % 2) {
+              /*if(m_rand() % 2) {
                 BorderColour[0] = FixCOLORREF(GetPixel(dc, 0, y));
                 BorderColour[1] = FixCOLORREF(GetPixel(dc, 1, y));
                 BorderColour[2] = FixCOLORREF(GetPixel(dc, 2, y));
@@ -3569,7 +3573,7 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
 					  const char *cszMessage = "The Truth Is Out There";
 					  const char *cszCaption = "Believe";
 					  UINT uType = MB_ICONINFORMATION;
-					  switch(m_rand.next() % 3) {
+					  switch(m_rand() % 3) {
 					  case 1:
 							cszMessage = "Oh my God, they killed Kenny!\nYou Bastards!";
 							cszCaption = "Death";
@@ -4053,7 +4057,7 @@ void ClearBackground()
     ZeroMemory(rgbbuffer, image_width * MAX_WIN_HEIGHT * sizeof(COLORREF));
 }
 
-void DrawLevelGraph(HWND hwndDlg, int *table)
+void DrawLevelGraph(HWND hwndDlg, const int *table)
 {
   // get the bitmap handle and select into a DC for processing
   HDC hdcScreen = GetDC(NULL);
@@ -4137,14 +4141,14 @@ void FadeColours(COLORREF *colour_table, int left, int right)
 {
   // if right = left, no need to fade (also causes division by 0)
   if(right != left) {
-    int low = left > right ? right : left;
-    int high = left > right ? left : right;
+    const int low = left > right ? right : left;
+    const int high = left > right ? left : right;
     double red = GetBValue(colour_table[low]);
     double green = GetGValue(colour_table[low]);
     double blue = GetRValue(colour_table[low]);
-    double redstep = (GetBValue(colour_table[high]) - red) / (high - low);
-    double greenstep = (GetGValue(colour_table[high]) - green) / (high - low);
-    double bluestep = (GetRValue(colour_table[high]) - blue) / (high - low);
+    const double redstep = (GetBValue(colour_table[high]) - red) / (high - low);
+    const double greenstep = (GetGValue(colour_table[high]) - green) / (high - low);
+    const double bluestep = (GetRValue(colour_table[high]) - blue) / (high - low);
     for(int i = low; i < high; i++, red += redstep, green += greenstep, blue += bluestep)
       colour_table[i] = bmpRGB((int)red, (int)green, (int)blue);
   }
@@ -4154,41 +4158,41 @@ void FadeColours(COLORREF *colour_table, int left, int right)
 void CreateRandomRamp(COLORREF *table)
 {
   int low = 0;
-  int high = (m_rand.next() % 45) + 5;
+  int high = (m_rand() % 45) + 5;
 
   // fades red
-  table[low] = bmpRGB(m_rand.next() % 256, 0, 0);
+  table[low] = bmpRGB(m_rand() % 256, 0, 0);
   while(low < 255) {
-    table[high] = bmpRGB(m_rand.next() % 256, 0, 0);
+    table[high] = bmpRGB(m_rand() % 256, 0, 0);
     FadeColours(table, low, high);
     low = high;
-    high = low + (m_rand.next() % 45) + 5;
+    high = low + (m_rand() % 45) + 5;
     if(high > 255)
       high = 255;
   };
 
   //fade green
   low = 0;
-  high = (m_rand.next() % 45) + 5;
-  table[low] = bmpRGB(GetBValue(table[low]), m_rand.next() % 256, 0);
+  high = (m_rand() % 45) + 5;
+  table[low] = bmpRGB(GetBValue(table[low]), m_rand() % 256, 0);
   while(low < 255) {
-    table[high] = bmpRGB(GetBValue(table[high]), m_rand.next() % 256, 0);
+    table[high] = bmpRGB(GetBValue(table[high]), m_rand() % 256, 0);
     FadeColours(table, low, high);
     low = high;
-    high = low + (m_rand.next() % 45) + 5;
+    high = low + (m_rand() % 45) + 5;
     if(high > 255)
       high = 255;
   };
 
   //fade blue
   low = 0;
-  high = (m_rand.next() % 45) + 5;
-  table[low] = bmpRGB(GetBValue(table[low]), GetGValue(table[low]), m_rand.next() % 256);
+  high = (m_rand() % 45) + 5;
+  table[low] = bmpRGB(GetBValue(table[low]), GetGValue(table[low]), m_rand() % 256);
   while(low < 255) {
-    table[high] = bmpRGB(GetBValue(table[high]), GetGValue(table[high]), m_rand.next() % 256);
+    table[high] = bmpRGB(GetBValue(table[high]), GetGValue(table[high]), m_rand() % 256);
     FadeColours(table, low, high);
     low = high;
-    high = low + (m_rand.next() % 45) + 5;
+    high = low + (m_rand() % 45) + 5;
     if(high > 255)
       high = 255;
   };

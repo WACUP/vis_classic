@@ -1,45 +1,53 @@
 /*
   LICENSE
   -------
-  Copyright (C) 1999-2002 Nullsoft, Inc.
+Copyright 2005-2013 Nullsoft, Inc.
+All rights reserved.
 
-  This source code is provided 'as-is', without any express or implied
-  warranty.  In no event will the authors be held liable for any damages
-  arising from the use of this source code or the software it produces.
+Redistribution and use in source and binary forms, with or without modification, 
+are permitted provided that the following conditions are met:
 
-  Permission is granted to anyone to use this source code for any purpose,
-  including commercial applications, and to alter it and redistribute it
-  freely, subject to the following restrictions:
+  * Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer. 
 
-  1. The origin of this source code must not be misrepresented; you must not
-     claim that you wrote the original source code.  If you use this source code
-     in a product, an acknowledgment in the product documentation would be
-     appreciated but is not required.
-  2. Altered source versions must be plainly marked as such, and must not be
-     misrepresented as being the original source code.
-  3. This notice may not be removed or altered from any source distribution.
+  * Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution. 
+
+  * Neither the name of Nullsoft nor the names of its contributors may be used to 
+    endorse or promote products derived from this software without specific prior written permission. 
+ 
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR 
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND 
+FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR 
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT 
+OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <math.h>
 #include <memory.h>
 #include "fft.h"
 
-#define PI 3.141592653589793238462643383279502884197169399
+#define PI 3.141592653589793238462643383279502884197169399f
 
 #define SafeDeleteArray(x) { if (x) { delete [] x; x = 0; } }
 
 /*****************************************************************************/
 
-FFT::FFT()
+int m_samples_in;
+int NFREQ;
+
+void InitEnvelopeTable(float power);
+void InitEqualizeTable(const bool mode);
+void InitBitRevTable();
+void InitCosSinTable();
+
+FFT::FFT() : m_samples_in(0), NFREQ(0), bitrevtable(0), envelope(0),
+                    equalize(0), temp1(0), temp2(0), cossintable(0)
 {
-	m_samples_in = 0;
-	NFREQ = 0;
-	bitrevtable = 0;
-	envelope = 0;
-	equalize = 0;
-	temp1 = 0;
-	temp2 = 0;
-	cossintable = 0;
 }
 
 /*****************************************************************************/
@@ -51,7 +59,7 @@ FFT::~FFT()
 
 /*****************************************************************************/
 
-void FFT::Init(int samples_in, int samples_out, int bEqualize, float envelope_power)
+void FFT::Init(const int samples_in, const int samples_out, const int bEqualize, const float envelope_power, const bool mode)
 {
 	// samples_in: # of waveform samples you'll feed into the FFT
 	// samples_out: # of frequency samples you want out; MUST BE A POWER OF 2.
@@ -70,7 +78,7 @@ void FFT::Init(int samples_in, int samples_out, int bEqualize, float envelope_po
 	if (envelope_power > 0)
 		InitEnvelopeTable(envelope_power);
 	if (bEqualize)
-		InitEqualizeTable();
+		InitEqualizeTable(mode);
 	temp1 = new float[NFREQ];
 	temp2 = new float[NFREQ];
 }
@@ -89,7 +97,7 @@ void FFT::CleanUp()
 
 /*****************************************************************************/
 
-void FFT::InitEqualizeTable()
+void FFT::InitEqualizeTable(const bool mode)
 {
 	// Setup a log table
 	// the part of a log curve to use is from 1 to <log base>
@@ -111,7 +119,7 @@ void FFT::InitEqualizeTable()
 	// equalize on log base 10 (pink noise will have a flat spectrum graph)
 	float bias = 0.04f;
 	for(int i = 0; i < NFREQ / 2; i++) {
-		float inv_half_nfreq = (9.0f - bias) / (float)(NFREQ / 2);
+		const float inv_half_nfreq = (9.0f - bias) / (float)(NFREQ / 2);
 		equalize[i] = log10f(1.0f + bias + (float)(i + 1) * inv_half_nfreq);
 		//if(bias > 0.0001f)
 			bias /= 1.0025f;
@@ -159,7 +167,7 @@ void FFT::InitBitRevTable()
     {
         if (j > i) 
         {
-            int temp = bitrevtable[i]; 
+            const int temp = bitrevtable[i]; 
             bitrevtable[i] = bitrevtable[j]; 
             bitrevtable[j] = temp;
         }
@@ -184,7 +192,7 @@ void FFT::InitCosSinTable()
     int tabsize = 0;
     while (dftsize <= NFREQ) 
     {
-        tabsize++;
+        ++tabsize;
         dftsize <<= 1;
     }
 
@@ -197,14 +205,14 @@ void FFT::InitCosSinTable()
         float theta = (float)(-2.0f*PI/(float)dftsize);
         cossintable[i][0] = (float)cosf(theta);
         cossintable[i][1] = (float)sinf(theta);
-        i++;
+        ++i;
         dftsize <<= 1;
     }
 }
 
 /*****************************************************************************/
 
-void FFT::time_to_frequency_domain(float *in_wavedata, float *out_spectraldata)
+void FFT::time_to_frequency_domain(const float *in_wavedata, float *out_spectraldata)
 {
     // Converts time-domain samples from in_wavedata[]
     //   into frequency-domain samples in out_spectraldata[].
@@ -291,22 +299,22 @@ void FFT::time_to_frequency_domain(float *in_wavedata, float *out_spectraldata)
         {
             for (int i = m; i < NFREQ; i+=dftsize) 
             {
-                int j = i + hdftsize;
-                float tempr = wr*real[j] - wi*imag[j];
-                float tempi = wr*imag[j] + wi*real[j];
+                const int j = i + hdftsize;
+                const float tempr = wr*real[j] - wi*imag[j];
+                const float tempi = wr*imag[j] + wi*real[j];
                 real[j] = real[i] - tempr;
                 imag[j] = imag[i] - tempi;
                 real[i] += tempr;
                 imag[i] += tempi;
             }
 
-            float wtemp = wr;
+            const float wtemp = wr;
 	    wr = wr*wpr - wi*wpi;
             wi = wi*wpr + wtemp*wpi;
         }
 
         dftsize <<= 1;
-        t++;
+        ++t;
     }
 
     // 3. take the magnitude & equalize it (on a log10 scale) for output

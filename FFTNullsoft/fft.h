@@ -1,35 +1,42 @@
 /*
   LICENSE
   -------
-  Copyright (C) 1999-2002 Nullsoft, Inc.
+Copyright 2005-2013 Nullsoft, Inc.
+All rights reserved.
 
-  This source code is provided 'as-is', without any express or implied
-  warranty.  In no event will the authors be held liable for any damages
-  arising from the use of this source code or the software it produces.
+Redistribution and use in source and binary forms, with or without modification, 
+are permitted provided that the following conditions are met:
 
-  Permission is granted to anyone to use this source code for any purpose,
-  including commercial applications, and to alter it and redistribute it
-  freely, subject to the following restrictions:
+  * Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer. 
 
-  1. The origin of this source code must not be misrepresented; you must not
-     claim that you wrote the original source code.  If you use this source code
-     in a product, an acknowledgment in the product documentation would be
-     appreciated but is not required.
-  2. Altered source versions must be plainly marked as such, and must not be
-     misrepresented as being the original source code.
-  3. This notice may not be removed or altered from any source distribution.
+  * Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution. 
+
+  * Neither the name of Nullsoft nor the names of its contributors may be used to 
+    endorse or promote products derived from this software without specific prior written permission. 
+ 
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR 
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND 
+FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR 
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT 
+OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __NULLSOFT_FFT_H__
-#define __NULLSOFT_FFT_H__ 1
+#ifndef __NULLSOFT_DX9_PLUGIN_SHELL_FFT_H__
+#define __NULLSOFT_DX9_PLUGIN_SHELL_FFT_H__ 1
 
 class FFT
 {
 public:
     FFT();
     ~FFT();
-    void Init(int samples_in, int samples_out, int bEqualize=1, float envelope_power=1.0f);
-    void time_to_frequency_domain(float *in_wavedata, float *out_spectraldata);
+    void Init(const int samples_in, const int samples_out, const int bEqualize=1, const float envelope_power=1.0f, const bool mode=false);
+    void time_to_frequency_domain(const float *in_wavedata, float *out_spectraldata);
     int  GetNumFreq() const { return NFREQ; };
     void CleanUp();
 private:
@@ -37,7 +44,7 @@ private:
     int NFREQ;
 
     void InitEnvelopeTable(float power);
-    void InitEqualizeTable();
+    void InitEqualizeTable(const bool mode);
     void InitBitRevTable();
     void InitCosSinTable();
     
@@ -49,4 +56,4 @@ private:
     float (*cossintable)[2];
 };
 
-#endif // __NULLSOFT_FFT_H__
+#endif

@@ -114,7 +114,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\FFTNullsoft\fft.h" />
-    <ClInclude Include="..\random\MersenneTwisterPk\PkRandom.h" />
     <ClInclude Include="api.h" />
     <ClInclude Include="BarColour.h" />
     <ClInclude Include="File.h" />

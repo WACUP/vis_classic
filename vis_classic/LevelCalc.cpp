@@ -1,5 +1,5 @@
 // returns the highest level (stereo)
-int UnionLevelCalcStereo(int low, int high, unsigned char *spectrumData)
+int UnionLevelCalcStereo(const int low, const int high, const unsigned char *spectrumData)
 {
   int newlevel = 0;
 
@@ -11,7 +11,7 @@ int UnionLevelCalcStereo(int low, int high, unsigned char *spectrumData)
 }
 
 // returns the highest level (stereo)
-int AverageLevelCalcStereo(int low, int high, unsigned char *spectrumData)
+int AverageLevelCalcStereo(const int low, const int high, const unsigned char *spectrumData)
 {
 	int newlevel = 0;
 
@@ -22,7 +22,7 @@ int AverageLevelCalcStereo(int low, int high, unsigned char *spectrumData)
 }
 
 // returns the highest level (mono)
-int UnionLevelCalcMono(int low, int high, unsigned char *spectrumDataLeft, unsigned char *spectrumDataRight)
+int UnionLevelCalcMono(const int low, const int high, const unsigned char *spectrumDataLeft, const unsigned char *spectrumDataRight)
 {
   int newlevel = 0;
 
@@ -37,7 +37,7 @@ int UnionLevelCalcMono(int low, int high, unsigned char *spectrumDataLeft, unsig
 }
 
 // returns the average level (mono)
-int AverageLevelCalcMono(int low, int high, unsigned char *spectrumDataLeft, unsigned char *spectrumDataRight)
+int AverageLevelCalcMono(const int low, const int high, const unsigned char *spectrumDataLeft, const unsigned char *spectrumDataRight)
 {
 	int newlevel = 0;
 
