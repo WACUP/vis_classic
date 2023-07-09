@@ -274,6 +274,8 @@ unsigned int naBarTable[MAX_BARS] = {0};
 bool bFftEqualize = true;
 float fFftEnvelope = 0.2f;
 float fFftScale = 2.0f;
+float fWaveform[576] = {0};
+float *fSpectrum = 0;
 
 void FFTInit(unsigned int nNewFft)
 {
@@ -281,8 +283,10 @@ void FFTInit(unsigned int nNewFft)
 		nFftFrequencies = nNewFft;
 		delete[] caSpectrumData[0];
 		delete[] caSpectrumData[1];
+		delete[] fSpectrum;
 		caSpectrumData[0] = new unsigned char[nFftFrequencies];
 		caSpectrumData[1] = new unsigned char[nFftFrequencies];
+        fSpectrum = new float[nFftFrequencies];
 	}
 	m_fft.Init(576, nFftFrequencies, bFftEqualize ? 1 : 0, fFftEnvelope, true);
 }
@@ -398,7 +402,7 @@ int CALLBACK EmbedWndCallback(embedWindowState *windowState, INT eventId, LPARAM
 {
 	if (eventId == 2)
 	{
-		PostMessage(windowState->me, WM_USER + (!param ? 102 : 105), 0, 0);
+        ShowHideEmbeddedWindow(windowState->me, !param, FALSE);
 	}
 	return 0;
 }
@@ -520,7 +524,7 @@ int AtAnStInit(winampVisModule *this_mod)
 				// necessary to avoid showing our window when minimised :)
 				if (!IsIconic(this_mod->hwndParent))
 				{
-					PostMessage(parent, WM_USER + 102, 0, 0);
+                ShowHideEmbeddedWindow(parent, TRUE, FALSE);
 				}
 				return 0;
 			}
@@ -584,33 +588,24 @@ void AtAnQuit(winampVisModule *this_mod)
 		delete[] caSpectrumData[1];
 }
 
-void FFTAnalyze(winampVisModule *this_mod)
-{
-	// we get 576 samples in from winamp.
-	// the output of the fft has 'num_frequencies' samples,
-	//   and represents the frequency range 0 hz - 22,050 hz.
-
-	for(int c = 0; c < this_mod->waveformNch; c++) {
-		float fWaveform[576];
-
-		for(int i = 0; i < 576; i++)
-			fWaveform[i] = (float)((this_mod->waveformData[c][i] ^ 128) - 128);
-
-		float *fSpectrum = (float *)_alloca(sizeof(float) * nFftFrequencies);
-		m_fft.time_to_frequency_domain(fWaveform, fSpectrum);
-		for(unsigned int i = 0; i < nFftFrequencies; i++) {
-			unsigned int h = (unsigned int)(fSpectrum[i] / fFftScale);
-			if(h > 255)
-				h = 255;
-			caSpectrumData[c][i] = (unsigned char)h;
-		}
-	}
-}
-
 // fast rendering of DIBbits (stereo)
 int AtAnStDirectRender(winampVisModule *this_mod)
 {
-	FFTAnalyze(this_mod);
+	// we assume we get 576 samples in from the wacup core.
+	// the output of the fft has 'num_frequencies' samples,
+	//   and represents the frequency range 0 hz - 22,050 hz.
+	for(int c = 0; c < this_mod->waveformNch; c++) {
+		for(int i = 0; i < 576; i++)
+			fWaveform[i] = (float)((this_mod->waveformData[c][i] ^ 128) - 128);
+
+		m_fft.time_to_frequency_domain(fWaveform, fSpectrum);
+
+		for(unsigned int i = 0; i < nFftFrequencies; i++) {
+			unsigned int h = (unsigned int)(fSpectrum[i] / fFftScale);
+			caSpectrumData[c][i] = (unsigned char)((h > 255) ? 255 : h);
+	}
+}
+
 	int volume = 0;
 
 	if(!mono) {
@@ -695,7 +690,8 @@ int AtAnStDirectRender(winampVisModule *this_mod)
 	// now blt the generated mess to the window
 	HDC hdc = GetDC(hatan);
 	if (hdc != NULL) {
-		SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height, 0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
+		SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height,
+                            0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
 		ReleaseDC(hatan,hdc);
 	}
 	return 0;
@@ -1039,7 +1035,7 @@ void CalculateAndUpdate(void)
 	ClearBackground();
 	BackgroundDraw(0);
 	if (IsWindow(hatan))
-		InvalidateRect(hatan, NULL, FALSE);
+		InvalidateRect(hatan, NULL, TRUE);
 }
 
 void UpdateColourLookup()
@@ -1198,28 +1194,77 @@ void DefaultSettings()
 
 void EraseWindow(HDC hdc)
 {
+    if (hdc != NULL) {
+        static HDC cache_dc = NULL;
+        static HBITMAP cache_bmp = NULL;
+        static HBRUSH hbr = NULL;
+        static COLORREF last_colour = RGB(0, 0, 0);
+        static int last_win_width = -1, last_win_height = -1;
+
     COLORREF colour = RGB(0, 0, 0);
-    if(backgrounddraw == BACKGROUND_FLASH || backgrounddraw == BACKGROUND_SOLID)
+        if ((backgrounddraw == BACKGROUND_FLASH) ||
+            (backgrounddraw == BACKGROUND_SOLID))
 	colour = FixCOLORREF(VolumeColour[0]);
-    HBRUSH hbr = CreateSolidBrush(colour);
+
+        // try to minimise regenerating the brush if
+        // it's not been changed since the last call
+        if ((hbr == NULL) || (last_colour != colour) ||
+            (last_win_width != win_width) || 
+            (last_win_height != win_height)) {
+            last_colour = colour;
+
+            if (hbr != NULL) {
+                DeleteObject(hbr);
+            }
+            hbr = CreateSolidBrush(colour);
+
+            if (cache_bmp != NULL) {
+                DeleteObject(cache_bmp);
+                cache_bmp = NULL;
+            }
+
+            if (cache_dc != NULL) {
+                DeleteDC(cache_dc);
+                cache_dc = NULL;
+            }
+
+            last_win_width = win_width;
+            last_win_height = win_height;
+        }
+
+        if (cache_dc == NULL) {
+            cache_dc = CreateCompatibleDC(hdc);
+            if (cache_dc != NULL) {
+                cache_bmp = CreateCompatibleBitmap(hdc, win_width, win_height);
+                DeleteObject(SelectObject(cache_dc, cache_bmp));
+
     // top
     RECT r = {0, 0, win_width, draw_y_start};
-    FillRect(hdc, &r, hbr);
+                FillRect(cache_dc, &r, hbr);
+
     // left
     r.top = r.bottom;
     r.bottom += draw_height;
     r.right = draw_x_start;
-    FillRect(hdc, &r, hbr);
+                FillRect(cache_dc, &r, hbr);
+
     // right
     r.left = r.right + draw_width;
     r.right = win_width;
-    FillRect(hdc, &r, hbr);
+                FillRect(cache_dc, &r, hbr);
+
     // bottom
     r.left = 0;
     r.top += draw_height;
     r.bottom = win_height;
-    FillRect(hdc, &r, hbr);
-    DeleteObject(hbr);
+                FillRect(cache_dc, &r, hbr);
+            }
+        }
+
+        if (cache_dc != NULL) {
+            BitBlt(hdc, 0, 0, win_width, win_height, cache_dc, 0, 0, SRCCOPY);
+        }
+    }
 }
 
 void EraseWindow(void)
@@ -2304,15 +2349,21 @@ void PeakLevelSparks()
 LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message) {
-		case WM_PAINT:
+        case WM_ERASEBKGND:
+            EraseWindow((HDC)wParam);
+            return 1;
+        case WM_NCPAINT:
+            return 0;
+		/*/case WM_PAINT:
 		{
 			PAINTSTRUCT ps = {0};
 			HDC hdc = BeginPaint(hwnd,&ps);   // BeginPaint clips to only the
 			EraseWindow(hdc);
-			SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height, 0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
+			SetDIBitsToDevice(hdc, draw_x_start, draw_y_start, draw_width, draw_height,
+                                0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
 			EndPaint(hwnd,&ps);
 			return 0;
-		}
+		}/**/
 		case WM_CONTEXTMENU:
 			{
 				short xPos = GET_X_LPARAM(lParam);
@@ -3210,9 +3261,9 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 
       // resize the Left & Right select track bars so the bar = exactly 255
       // to perfectly match the bitmap size
-      RECT r;
+      RECT r = { 0 };
       POINT p;
-      GetWindowRect(GetDlgItem(hwndDlg, IDC_LEFTSELECT),&r);
+      GetDlgItemRect(hwndDlg, IDC_LEFTSELECT, &r);
       p.x = r.left;
       p.y = r.top;
       ScreenToClient(hwndDlg, &p);
@@ -3224,7 +3275,7 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
       r.right = p.x;
       r.bottom = p.y;
       MoveWindow(GetDlgItem(hwndDlg, IDC_LEFTSELECT), r.left, r.top, r.right - r.left, 274, true);
-      GetWindowRect(GetDlgItem(hwndDlg, IDC_RIGHTSELECT),&r);
+      GetDlgItemRect(hwndDlg, IDC_RIGHTSELECT,&r);
       p.x = r.left;
       p.y = r.top;
       ScreenToClient(hwndDlg, &p);

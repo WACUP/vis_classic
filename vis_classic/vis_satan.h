@@ -1,4 +1,4 @@
-#define PLUGIN_VERSION " v2.1.6"
+#define PLUGIN_VERSION " v2.1.9"
 #ifndef _WIN64
 #define CS_MODULE_TITLE "Classic Spectrum Analyzer" PLUGIN_VERSION
 #else
