@@ -518,7 +518,10 @@ int AtAnStInit(winampVisModule *this_mod)
 
 				m_rand.seed(GetTickCount());
 
-				SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);
+			/*SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);/*/
+		    DWORD_PTR result = 0;
+		    SendMessageTimeout(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND,
+				                    SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, 2000, &result);/**/
 
 				// to better match the current visible state of WACUP it's
 				// necessary to avoid showing our window when minimised :)
@@ -1197,7 +1200,6 @@ void EraseWindow(HDC hdc)
     if (hdc != NULL) {
         static HDC cache_dc = NULL;
         static HBITMAP cache_bmp = NULL;
-        static HBRUSH hbr = NULL;
         static COLORREF last_colour = RGB(0, 0, 0);
         static int last_win_width = -1, last_win_height = -1;
 
@@ -1208,15 +1210,10 @@ void EraseWindow(HDC hdc)
 
         // try to minimise regenerating the brush if
         // it's not been changed since the last call
-        if ((hbr == NULL) || (last_colour != colour) ||
+        if ((last_colour != colour) ||
             (last_win_width != win_width) || 
             (last_win_height != win_height)) {
             last_colour = colour;
-
-            if (hbr != NULL) {
-                DeleteObject(hbr);
-            }
-            hbr = CreateSolidBrush(colour);
 
             if (cache_bmp != NULL) {
                 DeleteObject(cache_bmp);
@@ -1238,26 +1235,30 @@ void EraseWindow(HDC hdc)
                 cache_bmp = CreateCompatibleBitmap(hdc, win_width, win_height);
                 DeleteObject(SelectObject(cache_dc, cache_bmp));
 
+                const int old_bk_colour = SetBkColor(cache_dc, colour);
+
     // top
     RECT r = {0, 0, win_width, draw_y_start};
-                FillRect(cache_dc, &r, hbr);
+                ExtTextOut(cache_dc, 0, 0, ETO_OPAQUE, &r, NULL, 0, 0);
 
     // left
     r.top = r.bottom;
     r.bottom += draw_height;
     r.right = draw_x_start;
-                FillRect(cache_dc, &r, hbr);
+                ExtTextOut(cache_dc, 0, 0, ETO_OPAQUE, &r, NULL, 0, 0);
 
     // right
     r.left = r.right + draw_width;
     r.right = win_width;
-                FillRect(cache_dc, &r, hbr);
+                ExtTextOut(cache_dc, 0, 0, ETO_OPAQUE, &r, NULL, 0, 0);
 
     // bottom
     r.left = 0;
     r.top += draw_height;
     r.bottom = win_height;
-                FillRect(cache_dc, &r, hbr);
+                ExtTextOut(cache_dc, 0, 0, ETO_OPAQUE, &r, NULL, 0, 0);
+
+                SetBkColor(cache_dc, old_bk_colour);
             }
         }
 
@@ -4119,10 +4120,8 @@ void DrawLevelGraph(HWND hwndDlg, const int *table)
   //ReleaseDC(NULL, hdcScreen);
 
   // fill it black
-  HBRUSH hbr = CreateSolidBrush(RGB(0, 0, 0));
   RECT rect = {0, 0, 256, 256};
-  FillRect(mDC, &rect, hbr);
-  DeleteObject(hbr);
+  FillRectWithColour(mDC, &rect, RGB(0, 0, 0));
 
   // draw the graph
   for(int i = 0; i < 256; i++)
@@ -4173,9 +4172,7 @@ void DrawSolidColour(HWND hwndDlg, COLORREF colour, int identifier)
   ReleaseDC(NULL, hdcScreen);
 
   // fill it
-  HBRUSH hbr = CreateSolidBrush(RGB(GetBValue(colour), GetGValue(colour), GetRValue(colour)));
-  FillRect(mDC, &rect, hbr);
-  DeleteObject(hbr);
+  FillRectWithColour(mDC, &rect, RGB(GetBValue(colour), GetGValue(colour), GetRValue(colour)));
 
   // copy it back to the window
   SendDlgItemMessage(hwndDlg, identifier, STM_SETIMAGE, (WPARAM) IMAGE_BITMAP, (LPARAM) bitmap);
