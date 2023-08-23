@@ -249,6 +249,8 @@ BEGIN
         MENUITEM "&Properties...",              CM_CONFIG
         MENUITEM "Pro&files...",                CM_PROFILES
         MENUITEM SEPARATOR
+        MENUITEM "Vertically flip",             CM_FLIP
+        MENUITEM SEPARATOR
         MENUITEM "&About...",                   CM_ABOUT
         MENUITEM SEPARATOR
         MENUITEM "&Quit",                       CM_CLOSE

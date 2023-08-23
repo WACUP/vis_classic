@@ -103,7 +103,6 @@ void LoadPreviousProfile(void);
 int LoadProfileNumber(unsigned int nProfileNumber);
 void LoadUserColours(void);
 void LoadWindowPostion(RECT *pr);
-void SaveMainIniSettings(void);
 int SaveProfileIni(const wchar_t *cszProfile);
 void SaveProfileNameEntry(const wchar_t *cszProfile);
 int SaveTempCurrentSettings(void);

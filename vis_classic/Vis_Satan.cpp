@@ -271,7 +271,7 @@ FFT m_fft;
 unsigned int nFftFrequencies = 0;
 unsigned char *caSpectrumData[2] = {0};
 unsigned int naBarTable[MAX_BARS] = {0};
-bool bFftEqualize = true;
+bool bFftEqualize = true, bFlip = false;
 float fFftEnvelope = 0.2f;
 float fFftScale = 2.0f;
 float fWaveform[576] = {0};
@@ -500,16 +500,6 @@ int AtAnStInit(winampVisModule *this_mod)
 					peak_lookup[i] = new unsigned char[256];
 				}
 
-				// description for the DIBbits buffer (rgbbuffer)
-				bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-				bmi.bmiHeader.biWidth = image_width;
-				bmi.bmiHeader.biHeight = MAX_WIN_HEIGHT;
-				bmi.bmiHeader.biPlanes = 1;
-				bmi.bmiHeader.biBitCount = 32;
-				bmi.bmiHeader.biCompression = BI_RGB;
-				bmi.bmiHeader.biXPelsPerMeter = 100;
-				bmi.bmiHeader.biYPelsPerMeter = 100;
-
 				// use the Stereo variable calculation
 				CalculateVariables = CalculateVariablesStereo;
 
@@ -517,6 +507,13 @@ int AtAnStInit(winampVisModule *this_mod)
 				LoadCurrentProfileOrCreateDefault();
 
 				m_rand.seed(GetTickCount());
+
+            // description for the DIBbits buffer (rgbbuffer)
+            InitBitmapForARGB32(&bmi, image_width, MAX_WIN_HEIGHT);
+            if (!bFlip)
+            {
+                bmi.bmiHeader.biHeight = MAX_WIN_HEIGHT;
+            }
 
 			/*SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);/*/
 		    DWORD_PTR result = 0;
@@ -2381,6 +2378,8 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 					yPos = (short)rc.top;
 				}
 
+                CheckMenuItem(popupmenu, CM_FLIP, (bFlip ? MF_CHECKED : MF_UNCHECKED) | MF_BYCOMMAND);
+
 #ifdef WACUP_BUILD
 				// we force the un-skinned version of the menu
 				// as us being on a different thread doesn't
@@ -2422,6 +2421,11 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 			case CM_PROFILES:
 				DialogBox(AtAnSt_Vis_mod.hDllInstance, MAKEINTRESOURCE(IDD_SAVEOPTIONS), hatan, (DLGPROC)SaveDialogProc);
 				return 0;
+            case CM_FLIP:
+                bFlip = !bFlip;
+                bmi.bmiHeader.biHeight = (!bFlip ? MAX_WIN_HEIGHT : -MAX_WIN_HEIGHT);
+                WritePrivateProfileBool(cszIniMainSection, L"Flip", bFlip, szMainIniFilename);
+                return 0;
 			case CM_CLOSE:
 				DestroyWindow(hwnd);
 				return 0;
@@ -3872,6 +3876,7 @@ unsigned int CountProfileFiles(void)
 int LoadProfileIni(const wchar_t *cszProfile)
 {
 	AtAnSt_Vis_mod.latencyMs = ReadPrivateProfileInt(cszIniMainSection, L"Latency", 10, 0, 1000, szMainIniFilename);
+    bFlip = ReadPrivateProfileBool(cszIniMainSection, L"Flip", bFlip, szMainIniFilename);
 
 	wchar_t szFilename[MAX_PATH] = {0};
 	GetProfileINIFilename(szFilename, cszProfile);
@@ -4033,14 +4038,9 @@ void LoadWindowPostion(RECT *pr)
 * file saving functions
 */
 
-void SaveMainIniSettings(void)
-{
-	WritePrivateProfileInt(cszIniMainSection, L"Latency", AtAnSt_Vis_mod.latencyMs, szMainIniFilename);
-}
-
 int SaveProfileIni(const wchar_t *cszProfile)
 {
-	SaveMainIniSettings();
+    WritePrivateProfileInt(cszIniMainSection, L"Latency", AtAnSt_Vis_mod.latencyMs, szMainIniFilename);
 
 	wchar_t szFilename[MAX_PATH] = {0};
 	GetProfileINIFilename(szFilename, cszProfile);
