@@ -91,7 +91,7 @@ void ReadPrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsign
 
 	for(unsigned int i = 0; i < nSize; i++)
 	{
-	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
+		wchar_t szKey[TEMP_STRING_LENGTH] = {0};
 		pnValues[i] = ReadPrivateProfileInt(cszSection, I2WStr(i, szKey, ARRAYSIZE(szKey)), 0, -1, 0x7fffffff, cszFilename);
 	}
 }
@@ -113,7 +113,7 @@ void ReadPrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValue
 
 	for(unsigned int i = 0; i < nSize; i++)
 	{
-	wchar_t szKey[TEMP_STRING_LENGTH] = {0};
+		wchar_t szKey[TEMP_STRING_LENGTH] = {0};
 		pcrValues[i] = ReadPrivateProfileColour(cszSection, I2WStr(i, szKey, ARRAYSIZE(szKey)), 0, cszFilename);
 	}
 }

@@ -429,23 +429,23 @@ int AtAnStInit(winampVisModule *this_mod)
 	PathCombine(szMainIniFilename, (wchar_t*)SendMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_GETINIDIRECTORYW), cszIniFilename);
 #endif
 
-		// default to under Winamp
-		RECT rWinamp = {0};
-		GetWindowRect(this_mod->hwndParent, &rWinamp);
-		myWindowState.r.left = rWinamp.left;
-		myWindowState.r.top = rWinamp.bottom;
-		myWindowState.r.right = rWinamp.right;
-		myWindowState.r.bottom = rWinamp.bottom + 100;
+	// default to under Winamp
+	RECT rWinamp = {0};
+	GetWindowRect(this_mod->hwndParent, &rWinamp);
+	myWindowState.r.left = rWinamp.left;
+	myWindowState.r.top = rWinamp.bottom;
+	myWindowState.r.right = rWinamp.right;
+	myWindowState.r.bottom = rWinamp.bottom + 100;
 
-		// load saved window position
-		LoadWindowPostion(&myWindowState.r);
+	// load saved window position
+	LoadWindowPostion(&myWindowState.r);
 
-		// this sets a GUID which can be used in a modern skin / other parts of Winamp to
-		// indentify the embedded window frame such as allowing it to activated in a skin
-		SET_EMBED_GUID((&myWindowState), embed_guid);
-		myWindowState.flags = EMBED_FLAGS_SCALEABLE_WND |	// double-size support!
-							  EMBED_FLAGS_NOWINDOWMENU |
-							  EMBED_FLAGS_NOTRANSPARENCY;
+	// this sets a GUID which can be used in a modern skin / other parts of Winamp to
+	// indentify the embedded window frame such as allowing it to activated in a skin
+	SET_EMBED_GUID((&myWindowState), embed_guid);
+	myWindowState.flags = EMBED_FLAGS_SCALEABLE_WND |	// double-size support!
+						  EMBED_FLAGS_NOWINDOWMENU |
+						  EMBED_FLAGS_NOTRANSPARENCY;
 
     // to avoid issues, the skinned window has to be created on the
     // thread that it's being run from otherwise it'll fail create
@@ -453,60 +453,61 @@ int AtAnStInit(winampVisModule *this_mod)
     // otherwise have to call IPC_GET_EMBEDIF (slow) & then use the
     // returned method from it which sometimes doesn't work nicely
     HWND parent = CreateEmbedWindow(&myWindowState);
-		if (IsWindow(parent)) {
-			// TODO localise
-			SetWindowText(myWindowState.me, L"Classic Spectrum Analyzer"); // set window title
+	if (IsWindow(parent)) {
+		// TODO localise
+		SetWindowText(myWindowState.me, L"Classic Spectrum Analyzer"); // set window title
 
-			// if the parent is minimised then this will
-			// help to prevent it appearing on screen as
-			// it otherwise looks odd showing on its own
-			if (IsIconic(this_mod->hwndParent) &&
-				(myWindowState.wasabi_window == NULL))
-			{
-				myWindowState.callback = EmbedWndCallback;
+		// if the parent is minimised then this will
+		// help to prevent it appearing on screen as
+		// it otherwise looks odd showing on its own
+		if (IsIconic(this_mod->hwndParent) &&
+			(myWindowState.wasabi_window == NULL))
+		{
+			myWindowState.callback = EmbedWndCallback;
+        }
+
+        //register window class
+        WNDCLASSEX wcex = { sizeof(WNDCLASSEX), 0 };
+        wcex.lpfnWndProc = AtAnWndProc;
+        wcex.hInstance = this_mod->hDllInstance;
+        wcex.lpszClassName = cszClassName;
+        wcex.hCursor = GetArrowCursor(false);
+
+		if(RegisterClassEx(&wcex)) {
+			hatan = CreateWindow(cszClassName, L"Classic Spectrum Analyzer", WS_VISIBLE |
+								 WS_CHILDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_TABSTOP,
+								 0, 0, 0, 0, parent, NULL, this_mod->hDllInstance, 0);
+
+			if(!IsWindow(hatan)) {
+				UnregisterClass(cszClassName, this_mod->hDllInstance);
+				return 1;
 			}
 
-			//register window class
-			WNDCLASS wc = {0};
-			wc.lpfnWndProc = AtAnWndProc;
-			wc.hInstance = this_mod->hDllInstance;
-			wc.lpszClassName = cszClassName;
+			// assign popup menu
+			hmenu = LoadMenu(this_mod->hDllInstance, MAKEINTRESOURCE(IDM_POPUP));
+			popupmenu = GetSubMenu(hmenu, 0);
 
-			if(RegisterClass(&wc)) {
-				hatan = CreateWindow(cszClassName, L"Classic Spectrum Analyzer", WS_VISIBLE |
-									 WS_CHILDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_TABSTOP,
-									 0, 0, 0, 0, parent, NULL, this_mod->hDllInstance, 0);
+			// create the drawing buffer and initialize to 0
+			image_width = GetSystemMetrics(SM_CXSCREEN);
+			rgbbuffer = (COLORREF *)calloc(image_width * MAX_WIN_HEIGHT, sizeof(COLORREF));
 
-				if(!IsWindow(hatan)) {
-					UnregisterClass(cszClassName, this_mod->hDllInstance);
-					return 1;
-				}
+			// allocate bar colour lookup and peak table memory
+			colour_lookup[0] = 0; // no colour painted for a level of zero
+			colour_lookup[1] = 0;
+			peak_lookup[0] = 0;
+			peak_lookup[1] = 0;
+			for(int i = 1; i < 256; i++) {
+				colour_lookup[i] = new unsigned char[i];
+				peak_lookup[i] = new unsigned char[256];
+			}
 
-				// assign popup menu
-				hmenu = LoadMenu(this_mod->hDllInstance, MAKEINTRESOURCE(IDM_POPUP));
-				popupmenu = GetSubMenu(hmenu, 0);
+			// use the Stereo variable calculation
+			CalculateVariables = CalculateVariablesStereo;
 
-				// create the drawing buffer and initialize to 0
-				image_width = GetSystemMetrics(SM_CXSCREEN);
-				rgbbuffer = (COLORREF *)calloc(image_width * MAX_WIN_HEIGHT, sizeof(COLORREF));
+			// load or make default settings
+			LoadCurrentProfileOrCreateDefault();
 
-				// allocate bar colour lookup and peak table memory
-				colour_lookup[0] = 0; // no colour painted for a level of zero
-				colour_lookup[1] = 0;
-				peak_lookup[0] = 0;
-				peak_lookup[1] = 0;
-				for(int i = 1; i < 256; i++) {
-					colour_lookup[i] = new unsigned char[i];
-					peak_lookup[i] = new unsigned char[256];
-				}
-
-				// use the Stereo variable calculation
-				CalculateVariables = CalculateVariablesStereo;
-
-				// load or make default settings
-				LoadCurrentProfileOrCreateDefault();
-
-				m_rand.seed(GetTickCount());
+			m_rand.seed(GetTickCount());
 
             // description for the DIBbits buffer (rgbbuffer)
             InitBitmapForARGB32(&bmi, image_width, MAX_WIN_HEIGHT);
@@ -516,19 +517,18 @@ int AtAnStInit(winampVisModule *this_mod)
             }
 
 			/*SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);/*/
-		    DWORD_PTR result = 0;
 		    SendMessageTimeout(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND,
-				                    SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, 2000, &result);/**/
+				                    SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, 2000, NULL);/**/
 
-				// to better match the current visible state of WACUP it's
-				// necessary to avoid showing our window when minimised :)
-				if (!IsIconic(this_mod->hwndParent))
-				{
+			// to better match the current visible state of WACUP it's
+			// necessary to avoid showing our window when minimised :)
+			if (!IsIconic(this_mod->hwndParent))
+			{
                 ShowHideEmbeddedWindow(parent, TRUE, FALSE);
-				}
-				return 0;
 			}
+			return 0;
 		}
+	}
 	return -1;
 }
 
@@ -593,7 +593,7 @@ int AtAnStDirectRender(winampVisModule *this_mod)
 {
 	// we assume we get 576 samples in from the wacup core.
 	// the output of the fft has 'num_frequencies' samples,
-	//   and represents the frequency range 0 hz - 22,050 hz.
+	// and represents the frequency range 0 hz - 22,050 hz.
 	for(int c = 0; c < this_mod->waveformNch; c++) {
 		for(int i = 0; i < 576; i++)
 			fWaveform[i] = (float)((this_mod->waveformData[c][i] ^ 128) - 128);
@@ -603,8 +603,8 @@ int AtAnStDirectRender(winampVisModule *this_mod)
 		for(unsigned int i = 0; i < nFftFrequencies; i++) {
 			unsigned int h = (unsigned int)(fSpectrum[i] / fFftScale);
 			caSpectrumData[c][i] = (unsigned char)((h > 255) ? 255 : h);
+		}
 	}
-}
 
 	int volume = 0;
 
@@ -683,7 +683,7 @@ int AtAnStDirectRender(winampVisModule *this_mod)
 		volume /= bands;  // make volume average of all bands calculated
 	}
 
-	BackgroundDraw((unsigned char)volume);  // clear (draw) the background
+    BackgroundDraw((unsigned char)volume);  // clear (draw) the background
 
 	RenderBars(); // call the drawing function
 
@@ -1200,10 +1200,10 @@ void EraseWindow(HDC hdc)
         static COLORREF last_colour = RGB(0, 0, 0);
         static int last_win_width = -1, last_win_height = -1;
 
-    COLORREF colour = RGB(0, 0, 0);
+        COLORREF colour = RGB(0, 0, 0);
         if ((backgrounddraw == BACKGROUND_FLASH) ||
             (backgrounddraw == BACKGROUND_SOLID))
-	colour = FixCOLORREF(VolumeColour[0]);
+            colour = FixCOLORREF(VolumeColour[0]);
 
         // try to minimise regenerating the brush if
         // it's not been changed since the last call
@@ -1234,25 +1234,25 @@ void EraseWindow(HDC hdc)
 
                 const int old_bk_colour = SetBkColor(cache_dc, colour);
 
-    // top
-    RECT r = {0, 0, win_width, draw_y_start};
+                // top
+                RECT r = { 0, 0, win_width, draw_y_start };
                 ExtTextOut(cache_dc, 0, 0, ETO_OPAQUE, &r, NULL, 0, 0);
 
-    // left
-    r.top = r.bottom;
-    r.bottom += draw_height;
-    r.right = draw_x_start;
+                // left
+                r.top = r.bottom;
+                r.bottom += draw_height;
+                r.right = draw_x_start;
                 ExtTextOut(cache_dc, 0, 0, ETO_OPAQUE, &r, NULL, 0, 0);
 
-    // right
-    r.left = r.right + draw_width;
-    r.right = win_width;
+                // right
+                r.left = r.right + draw_width;
+                r.right = win_width;
                 ExtTextOut(cache_dc, 0, 0, ETO_OPAQUE, &r, NULL, 0, 0);
 
-    // bottom
-    r.left = 0;
-    r.top += draw_height;
-    r.bottom = win_height;
+                // bottom
+                r.left = 0;
+                r.top += draw_height;
+                r.bottom = win_height;
                 ExtTextOut(cache_dc, 0, 0, ETO_OPAQUE, &r, NULL, 0, 0);
 
                 SetBkColor(cache_dc, old_bk_colour);
@@ -1268,29 +1268,33 @@ void EraseWindow(HDC hdc)
 void EraseWindow(void)
 {
     if(IsWindow(hatan)) {
-	HDC hdc = GetDC(hatan);
-	EraseWindow(hdc);
-	ReleaseDC(hatan, hdc);
+	    HDC hdc = GetDC(hatan);
+	    EraseWindow(hdc);
+	    ReleaseDC(hatan, hdc);
     }
 }
 
 // clear the background with zeros
 void BackgroundBlack(unsigned char)
 {
-  ZeroMemory(&rgbbuffer[0], draw_width * 4);
-  for(int y = image_width * y_spacing; y < draw_height * image_width; y += image_width * y_spacing)
-    ZeroMemory(&rgbbuffer[y], draw_width * 4);
+  if(rgbbuffer) {
+    ZeroMemory(&rgbbuffer[0], draw_width * 4);
+    for(int y = image_width * y_spacing; y < draw_height * image_width; y += image_width * y_spacing)
+      ZeroMemory(&rgbbuffer[y], draw_width * 4);
+  }
 }
 
 // attempt at a double buffer clearing for speed.  Not much faster than the
 // above method.
 void BackgroundBlackFast(unsigned char)
 {
-  for(int bar = 0; bar < bands; bar++) {
-    for(int y = (int)(level[bar] / level_height_scaler); y <= (int)(levelbuffer[1][bar] / level_height_scaler); y++)
-      ZeroMemory(&rgbbuffer[y * image_width + bar * total_width], band_width * 4);
-    //if(peaklevelbuffer[1][bar])
-      ZeroMemory(&rgbbuffer[peaklevelbuffer[1][bar] * image_width + bar * total_width], band_width * 4);
+  if(rgbbuffer) {
+    for(int bar = 0; bar < bands; bar++) {
+      for(int y = (int)(level[bar] / level_height_scaler); y <= (int)(levelbuffer[1][bar] / level_height_scaler); y++)
+        ZeroMemory(&rgbbuffer[y * image_width + bar * total_width], band_width * 4);
+      //if(peaklevelbuffer[1][bar])
+        ZeroMemory(&rgbbuffer[peaklevelbuffer[1][bar] * image_width + bar * total_width], band_width * 4);
+    }
   }
 
   for(int i = 0; i < bands; i++) {
@@ -1303,18 +1307,20 @@ void BackgroundBlackFast(unsigned char)
 // clear the background drawing a grid based on background flash colours
 void BackgroundFade(unsigned char)
 {
-  for(int y = 0; y < draw_height; y += y_spacing) {
-    // +0.0035 is used to correct for rounding errors
-    int colouridx = (int)(y * (height_scale + 0.0035));
-    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(int i = 0; i < band_width; i++)
-        rgbbuffer[y * image_width + x + i] = VolumeColour[colouridx];
+  if(rgbbuffer) {
+    for(int y = 0; y < draw_height; y += y_spacing) {
+      // +0.0035 is used to correct for rounding errors
+      int colouridx = (int)(y * (height_scale + 0.0035));
+      for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+        for(int i = 0; i < band_width; i++)
+          rgbbuffer[y * image_width + x + i] = VolumeColour[colouridx];
+      }
+      // no need to draw the inbetween colour (black) now
+      //for(x = band_width; x < draw_width; x += x_spacing + band_width) {
+      //  for(i = 0; i < x_spacing; i++)
+      //    rgbbuffer[y * 576 + x + i] = 0;
+      //}
     }
-    // no need to draw the inbetween colour (black) now
-    //for(x = band_width; x < draw_width; x += x_spacing + band_width) {
-    //  for(i = 0; i < x_spacing; i++)
-    //    rgbbuffer[y * 576 + x + i] = 0;
-    //}
   }
 }
 
@@ -1322,17 +1328,18 @@ void BackgroundFade(unsigned char)
 // for the mirror effect
 void BackgroundFadeMirror(unsigned char)
 {
-  const int middle = draw_height / 2 / y_spacing * y_spacing;
-  //COLORREF colour;
+  if(rgbbuffer) {
+    const int middle = draw_height / 2 / y_spacing * y_spacing;
 
-  for(int y = 0; y <= draw_height / 2; y += y_spacing) {
-    // +0.0035 is used to correct for rounding errors
-    //colouridx = (int)(y * 1.90f * (height_scale - 0.0035f));
-    int colouridx = (int)(y * 2.0 * level_height_scaler);
-    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(int i = 0; i < band_width; i++) {
-        rgbbuffer[(middle + y) * image_width + x + i] = VolumeColour[colouridx];
-        rgbbuffer[(middle - y) * image_width + x + i] = VolumeColour[colouridx];
+    for(int y = 0; y <= draw_height / 2; y += y_spacing) {
+      // +0.0035 is used to correct for rounding errors
+      //colouridx = (int)(y * 1.90f * (height_scale - 0.0035f));
+      const int colouridx = (int)(y * 2.0 * level_height_scaler);
+      for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+        for(int i = 0; i < band_width; i++) {
+          rgbbuffer[(middle + y) * image_width + x + i] = VolumeColour[colouridx];
+          rgbbuffer[(middle - y) * image_width + x + i] = VolumeColour[colouridx];
+        }
       }
     }
   }
@@ -1342,29 +1349,31 @@ void BackgroundFadeMirror(unsigned char)
 // this is for the Reflection style
 void BackgroundFadeReflection(unsigned char)
 {
-  const int middle = draw_height / 3 / y_spacing * y_spacing;
-  COLORREF colour;
+  if (rgbbuffer) {
+    const int middle = draw_height / 3 / y_spacing * y_spacing;
 
-  // draw top part of background
-  for(int y = middle; y < draw_height; y += y_spacing) {
-    // +0.0035 is used to correct for rounding errors
-    int colouridx = (int)((y - middle) * 1.49 * (height_scale + 0.0035));
-    colour = VolumeColour[colouridx];
-    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(int i = 0; i < band_width; i++)
-        rgbbuffer[y * image_width + x + i] = colour;
-        //rgbbuffer[(middle - y) * image_width + x + i] = colour;
+    // draw top part of background
+    for(int y = middle; y < draw_height; y += y_spacing) {
+      // +0.0035 is used to correct for rounding errors
+      const int colouridx = (int)((y - middle) * 1.49 * (height_scale + 0.0035));
+      const COLORREF colour = VolumeColour[colouridx];
+      for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+        for(int i = 0; i < band_width; i++)
+          rgbbuffer[y * image_width + x + i] = colour;
+          //rgbbuffer[(middle - y) * image_width + x + i] = colour;
+      }
     }
-  }
-  // now draw bottom (reflection) part
-  for(int y = middle; y >= 0; y -= y_spacing) {
-    // +0.0035 is used to correct for rounding errors
-    int colouridx = (int)((middle - y) * 2.975 * (height_scale + 0.0035));
-    colour = bmpRGB(GetBValue(VolumeColour[colouridx]) / 1.45, GetGValue(VolumeColour[colouridx]) / 1.45, GetRValue(VolumeColour[colouridx]) / 1.45);
-    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(int i = 0; i < band_width; i++)
-        rgbbuffer[y * image_width + x + i] = colour;
-        //rgbbuffer[(middle - y) * image_width + x + i] = colour;
+
+    // now draw bottom (reflection) part
+    for(int y = middle; y >= 0; y -= y_spacing) {
+      // +0.0035 is used to correct for rounding errors
+      const int colouridx = (int)((middle - y) * 2.975 * (height_scale + 0.0035));
+      const COLORREF colour = bmpRGB(GetBValue(VolumeColour[colouridx]) / 1.45, GetGValue(VolumeColour[colouridx]) / 1.45, GetRValue(VolumeColour[colouridx]) / 1.45);
+      for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+        for(int i = 0; i < band_width; i++)
+          rgbbuffer[y * image_width + x + i] = colour;
+          //rgbbuffer[(middle - y) * image_width + x + i] = colour;
+      }
     }
   }
 }
@@ -1372,36 +1381,39 @@ void BackgroundFadeReflection(unsigned char)
 // clear the background using the volume to determine the colour
 void BackgroundFlash(unsigned char volume)
 {
+  if (rgbbuffer) {
+    // for loop and CopyMemory blank first line...
+    for(int x = 0; x < draw_width; x++)
+      rgbbuffer[x] = VolumeColour[volume];
+      //CopyMemory(&rgbbuffer[draw_width / 16], &rgbbuffer[0], draw_width / 4);
+      //CopyMemory(&rgbbuffer[draw_width / 8], &rgbbuffer[0], draw_width / 2);
+      //CopyMemory(&rgbbuffer[draw_width / 4], &rgbbuffer[0], draw_width);
+      //CopyMemory(&rgbbuffer[draw_width / 2], &rgbbuffer[0], draw_width * 2 + draw_width % 4);
 
-  // for loop and CopyMemory blank first line...
-  for(int x = 0; x < draw_width; x++)
-     rgbbuffer[x] = VolumeColour[volume];
-  //CopyMemory(&rgbbuffer[draw_width / 16], &rgbbuffer[0], draw_width / 4);
-  //CopyMemory(&rgbbuffer[draw_width / 8], &rgbbuffer[0], draw_width / 2);
-  //CopyMemory(&rgbbuffer[draw_width / 4], &rgbbuffer[0], draw_width);
-  //CopyMemory(&rgbbuffer[draw_width / 2], &rgbbuffer[0], draw_width * 2 + draw_width % 4);
-
-  // ...now copy the first line to the rest of the lines
-  for(int y = image_width; y < draw_height * image_width; y += image_width)
-    CopyMemory(&rgbbuffer[y], &rgbbuffer[0], draw_width * 4);
+      // ...now copy the first line to the rest of the lines
+      for(int y = image_width; y < draw_height * image_width; y += image_width)
+        CopyMemory(&rgbbuffer[y], &rgbbuffer[0], draw_width * 4);
+  }
 }
 
 // clear the background drawing a grid based on dim Freq Bar colours
 void BackgroundGrid(unsigned char)
 {
-  for(int y = 0; y < draw_height; y += y_spacing) {
-    // +0.0035 is used to correct for rounding errors
-    int colouridx = (int)(y * (height_scale + 0.0035));
-    COLORREF colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
-    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(int i = 0; i < band_width; i++)
-        rgbbuffer[y * image_width + x + i] = colour;
+  if (rgbbuffer) {
+    for(int y = 0; y < draw_height; y += y_spacing) {
+      // +0.0035 is used to correct for rounding errors
+      const int colouridx = (int)(y * (height_scale + 0.0035));
+      const COLORREF colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
+      for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+        for(int i = 0; i < band_width; i++)
+          rgbbuffer[y * image_width + x + i] = colour;
+      }
+      // no need to draw the inbetween colour (black) now
+      //for(x = band_width; x < draw_width; x += x_spacing + band_width) {
+      //  for(i = 0; i < x_spacing; i++)
+      //    rgbbuffer[y * 576 + x + i] = 0;
+      //}
     }
-    // no need to draw the inbetween colour (black) now
-    //for(x = band_width; x < draw_width; x += x_spacing + band_width) {
-    //  for(i = 0; i < x_spacing; i++)
-    //    rgbbuffer[y * 576 + x + i] = 0;
-    //}
   }
 }
 
@@ -1409,17 +1421,19 @@ void BackgroundGrid(unsigned char)
 // this is for the Mirror style
 void BackgroundGridMirror(unsigned char)
 {
-  const int middle = draw_height / 2 / y_spacing * y_spacing;
+  if (rgbbuffer) {
+    const int middle = draw_height / 2 / y_spacing * y_spacing;
 
-  for(int y = 0; y <= draw_height / 2; y += y_spacing) {
-    // +0.0035 is used to correct for rounding errors
-    //colouridx = (int)(y * 1.97f * (height_scale + 0.0035f));
-    int colouridx = (int)(y * 2.0 * level_height_scaler);
-    COLORREF colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
-    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(int i = 0; i < band_width; i++) {
-        rgbbuffer[(middle + y) * image_width + x + i] = colour;
-        rgbbuffer[(middle - y) * image_width + x + i] = colour;
+    for(int y = 0; y <= draw_height / 2; y += y_spacing) {
+      // +0.0035 is used to correct for rounding errors
+      //colouridx = (int)(y * 1.97f * (height_scale + 0.0035f));
+      const int colouridx = (int)(y * 2.0 * level_height_scaler);
+      const COLORREF colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
+      for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+        for(int i = 0; i < band_width; i++) {
+          rgbbuffer[(middle + y) * image_width + x + i] = colour;
+          rgbbuffer[(middle - y) * image_width + x + i] = colour;
+        }
       }
     }
   }
@@ -1429,29 +1443,31 @@ void BackgroundGridMirror(unsigned char)
 // this is for the Reflection style
 void BackgroundGridReflection(unsigned char)
 {
-  const int middle = draw_height / 3 / y_spacing * y_spacing;
-  COLORREF colour;
+  if (rgbbuffer) {
+    const int middle = draw_height / 3 / y_spacing * y_spacing;
 
-  // draw top part of background
-  for(int y = middle; y < draw_height; y += y_spacing) {
-    // +0.0035 is used to correct for rounding errors
-    int colouridx = (int)((y - middle) * 1.49 * (height_scale + 0.0035));
-    colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
-    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(int i = 0; i < band_width; i++)
-        rgbbuffer[y * image_width + x + i] = colour;
+    // draw top part of background
+    for(int y = middle; y < draw_height; y += y_spacing) {
+      // +0.0035 is used to correct for rounding errors
+      const int colouridx = (int)((y - middle) * 1.49 * (height_scale + 0.0035));
+      const COLORREF colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 3, GetGValue(FreqBarColour[colouridx]) / 3, GetRValue(FreqBarColour[colouridx]) / 3);
+      for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+        for(int i = 0; i < band_width; i++)
+          rgbbuffer[y * image_width + x + i] = colour;
         //rgbbuffer[(middle - y) * image_width + x + i] = colour;
+      }
     }
-  }
-  // now draw bottom (reflection) part
-  for(int y = middle; y >= 0; y -= y_spacing) {
-    // +0.0035 is used to correct for rounding errors
-    int colouridx = (int)((middle - y) * 2.975 * (height_scale + 0.0035));
-    colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 4.5, GetGValue(FreqBarColour[colouridx]) / 4.5, GetRValue(FreqBarColour[colouridx]) / 4.5);
-    for(int x = 0; x < draw_width; x += x_spacing + band_width) {
-      for(int i = 0; i < band_width; i++)
-        rgbbuffer[y * image_width + x + i] = colour;
-        //rgbbuffer[(middle - y) * image_width + x + i] = colour;
+
+    // now draw bottom (reflection) part
+    for(int y = middle; y >= 0; y -= y_spacing) {
+      // +0.0035 is used to correct for rounding errors
+      const int colouridx = (int)((middle - y) * 2.975 * (height_scale + 0.0035));
+      const COLORREF colour = bmpRGB(GetBValue(FreqBarColour[colouridx]) / 4.5, GetGValue(FreqBarColour[colouridx]) / 4.5, GetRValue(FreqBarColour[colouridx]) / 4.5);
+      for(int x = 0; x < draw_width; x += x_spacing + band_width) {
+        for(int i = 0; i < band_width; i++)
+          rgbbuffer[y * image_width + x + i] = colour;
+          //rgbbuffer[(middle - y) * image_width + x + i] = colour;
+      }
     }
   }
 }
@@ -1459,156 +1475,165 @@ void BackgroundGridReflection(unsigned char)
 // clear the background with volume colour 0
 void BackgroundSolid(unsigned char)
 {
-  for(int x = 0; x < draw_width; x++)
-     rgbbuffer[x] = VolumeColour[0];
+  if (rgbbuffer) {
+    for(int x = 0; x < draw_width; x++)
+      rgbbuffer[x] = VolumeColour[0];
 
-  //CopyMemory(&rgbbuffer[draw_width / 16], &rgbbuffer[0], draw_width / 4);
-  //CopyMemory(&rgbbuffer[draw_width / 8], &rgbbuffer[0], draw_width / 2);
-  //CopyMemory(&rgbbuffer[draw_width / 4], &rgbbuffer[0], draw_width);
-  //CopyMemory(&rgbbuffer[draw_width / 2], &rgbbuffer[0], draw_width * 2 + draw_width % 4);
-  for(int y = image_width; y < draw_height * image_width; y += image_width)
-    CopyMemory(&rgbbuffer[y], &rgbbuffer[0], draw_width * 4);
+    //CopyMemory(&rgbbuffer[draw_width / 16], &rgbbuffer[0], draw_width / 4);
+    //CopyMemory(&rgbbuffer[draw_width / 8], &rgbbuffer[0], draw_width / 2);
+    //CopyMemory(&rgbbuffer[draw_width / 4], &rgbbuffer[0], draw_width);
+    //CopyMemory(&rgbbuffer[draw_width / 2], &rgbbuffer[0], draw_width * 2 + draw_width % 4);
+    for(int y = image_width; y < draw_height * image_width; y += image_width)
+      CopyMemory(&rgbbuffer[y], &rgbbuffer[0], draw_width * 4);
+  }
 }
 
 void RenderSingleBars()
 {
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
-    //for(int y = 0; y * height_scale < (int)(level[i]); y++) {
-    //for(y = 0; y < (int)(level[i] / height_scale); y += y_spacing)
-    //for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
-	for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
-	}
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
+      //for(int y = 0; y * height_scale < (int)(level[i]); y++) {
+      //for(y = 0; y < (int)(level[i] / height_scale); y += y_spacing)
+      //for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
+	  for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
+	  }
 
-    if(peaklevel[i])
-      rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+      if(peaklevel[i])
+        rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+    }
   }
 }
 
 void RenderWideBars()
 {
-  //static int trippycolourbase = 0, trippycolour;
-  COLORREF copycolour;
-  //trippycolour = trippycolourbase;
+  if (rgbbuffer) {
+    //static int trippycolourbase = 0, trippycolour;
+    //trippycolour = trippycolourbase;
 
-  for(int i = 0; i < bands; i++) {
-    //for(x = i * (band_width + x_spacing); x < i * (band_width + x_spacing) + band_width; x++) {
-    int x = i * total_width;
-    int x_stop = i * total_width + band_width;
-    //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
-    //for(int y = 0; y * height_scale < (int)(level[i]); y++) {
-    //for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
-    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      copycolour = FreqBarColour[colour_lookup[level[i]][y]];
-      int temp = y * image_width;
-      for(int tx = x; tx < x_stop; tx++)
-        rgbbuffer[temp + tx] = copycolour;
+    for(int i = 0; i < bands; i++) {
+      //for(x = i * (band_width + x_spacing); x < i * (band_width + x_spacing) + band_width; x++) {
+      int x = i * total_width;
+      const int x_stop = i * total_width + band_width;
+      //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
+      //for(int y = 0; y * height_scale < (int)(level[i]); y++) {
+      //for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
+      for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        const COLORREF copycolour = FreqBarColour[colour_lookup[level[i]][y]];
+        const int temp = y * image_width;
+        for(int tx = x; tx < x_stop; tx++)
+          rgbbuffer[temp + tx] = copycolour;
+      }
+      //trippycolour = (trippycolour + (576 / bands)) % 576;
+
+      //for(tx = x + 1; tx < i * (band_width + x_spacing) + band_width; tx++)
+      //  for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
+      //    rgbbuffer[y * 576 + tx] = rgbbuffer[y * 576 + x];
+      //    //CopyMemory(&rgbbuffer[y * 576 + tx], &rgbbuffer[y * 576 + x], 4);
+      // reordering the for loops made a big difference in performance (suspect better cache hit)
+      //for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+      //  copycolour = rgbbuffer[y * image_width + x];
+      //  for(tx = x + 1; tx < i * (band_width + x_spacing) + band_width; tx++)
+      //    rgbbuffer[y * image_width + tx] = copycolour;
+      //    //CopyMemory(&rgbbuffer[y * 576 + tx], &rgbbuffer[y * 576 + x], 4);
+      //}
+
+      if(peaklevel[i]) {
+        const COLORREF copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        const int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
+        do{
+          //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = PeakColour[peak_lookup[peaklevel[i]][peakchange[i]]];
+          rgbbuffer[temp + x] = copycolour;
+          //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = FreqBarColour[peaklevel[i]]; // use Frequency Bar colour
+          //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = FreqBarColour[(int)(peakchange[i] * peak_fade_scaler)]; // fade-out Frequency Bar colour
+        }while(++x < x_stop);
+      }
     }
-    //trippycolour = (trippycolour + (576 / bands)) % 576;
 
-    //for(tx = x + 1; tx < i * (band_width + x_spacing) + band_width; tx++)
-    //  for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
-    //    rgbbuffer[y * 576 + tx] = rgbbuffer[y * 576 + x];
-    //    //CopyMemory(&rgbbuffer[y * 576 + tx], &rgbbuffer[y * 576 + x], 4);
-    // reordering the for loops made a big difference in performance (suspect better cache hit)
-    //for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-    //  copycolour = rgbbuffer[y * image_width + x];
-    //  for(tx = x + 1; tx < i * (band_width + x_spacing) + band_width; tx++)
-    //    rgbbuffer[y * image_width + tx] = copycolour;
-    //    //CopyMemory(&rgbbuffer[y * 576 + tx], &rgbbuffer[y * 576 + x], 4);
-    //}
-
-    if(peaklevel[i]) {
-      copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
-      do{
-        //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = PeakColour[peak_lookup[peaklevel[i]][peakchange[i]]];
-        rgbbuffer[temp + x] = copycolour;
-        //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = FreqBarColour[peaklevel[i]]; // use Frequency Bar colour
-        //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = FreqBarColour[(int)(peakchange[i] * peak_fade_scaler)]; // fade-out Frequency Bar colour
-      }while(++x < x_stop);
-    }
+    //++trippycolourbase %= 576;
   }
-
-  //++trippycolourbase %= 576;
 }
 
 void RenderSingleBarsMirror()
 {
-  const int middle = (draw_height / 2 / y_spacing) * y_spacing;
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
-    //for(int y = 0; y * height_scale < (int)(level[i]); y++) {
-    //for(y = 0; y < (int)(level[i] / height_scale); y += y_spacing)
-    //for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
-    for(int y = 0; y < (int)(level[i] / level_height_scaler) / 2; y += y_spacing) {
-	  _ASSERT(y * 2 < 255);
-      rgbbuffer[(middle + y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 2]];
-      rgbbuffer[(middle - y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 2]];
-    }
+  if (rgbbuffer) {
+    const int middle = (draw_height / 2 / y_spacing) * y_spacing;
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      //for(int y = 0; y < (int)(level[i] / (255.0f / (draw_height / y_spacing))); y++) {
+      //for(int y = 0; y * height_scale < (int)(level[i]); y++) {
+      //for(y = 0; y < (int)(level[i] / height_scale); y += y_spacing)
+      //for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
+      for(int y = 0; y < (int)(level[i] / level_height_scaler) / 2; y += y_spacing) {
+	    _ASSERT(y * 2 < 255);
+        rgbbuffer[(middle + y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 2]];
+        rgbbuffer[(middle - y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 2]];
+      }
 
-         //temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width;
-    if(peaklevel[i]) {
-      rgbbuffer[(middle + ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      rgbbuffer[(middle - ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+      //temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width;
+      if(peaklevel[i]) {
+        rgbbuffer[(middle + ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        rgbbuffer[(middle - ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+      }
     }
   }
 }
 
 void RenderWideBarsMirror()
 {
-  //static int trippycolourbase = 0, trippycolour;
-  int temp, temp2, middle = (draw_height / 2 / y_spacing) * y_spacing;
-  COLORREF copycolour;
-  //trippycolour = trippycolourbase;
+  if (rgbbuffer) {
+    //static int trippycolourbase = 0, trippycolour;
+    const int middle = (draw_height / 2 / y_spacing) * y_spacing;
+    int temp, temp2;
+    //trippycolour = trippycolourbase;
 
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    int x_stop = i * total_width + band_width;
-    for(int y = 0; y < (int)(level[i] / level_height_scaler) / 2; y += y_spacing) {
-	  _ASSERT(y * 2 < 255);
-      copycolour = FreqBarColour[colour_lookup[level[i]][y * 2]];
-      temp = (middle + y) * image_width;
-      temp2 = (middle - y) * image_width;
-      for(int tx = x; tx < x_stop; tx++) {
-        rgbbuffer[temp + tx] = copycolour;
-        rgbbuffer[temp2 + tx] = copycolour;
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      const int x_stop = i * total_width + band_width;
+      for(int y = 0; y < (int)(level[i] / level_height_scaler) / 2; y += y_spacing) {
+	    _ASSERT(y * 2 < 255);
+        const COLORREF copycolour = FreqBarColour[colour_lookup[level[i]][y * 2]];
+        temp = (middle + y) * image_width;
+        temp2 = (middle - y) * image_width;
+        for(int tx = x; tx < x_stop; tx++) {
+          rgbbuffer[temp + tx] = copycolour;
+          rgbbuffer[temp2 + tx] = copycolour;
+        }
+      }
+      //trippycolour = (trippycolour + (576 / bands)) % 576;
+
+      //for(tx = x + 1; tx < i * (band_width + x_spacing) + band_width; tx++)
+      //  for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
+      //    rgbbuffer[y * 576 + tx] = rgbbuffer[y * 576 + x];
+      //    //CopyMemory(&rgbbuffer[y * 576 + tx], &rgbbuffer[y * 576 + x], 4);
+      // reordering the for loops made a big difference in performance (suspect better cache hit)
+      //for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+      //  copycolour = rgbbuffer[y * image_width + x];
+      //  for(tx = x + 1; tx < i * (band_width + x_spacing) + band_width; tx++)
+      //    rgbbuffer[y * image_width + tx] = copycolour;
+      //    //CopyMemory(&rgbbuffer[y * 576 + tx], &rgbbuffer[y * 576 + x], 4);
+      //}
+
+      if(peaklevel[i]) {
+        const COLORREF copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width;
+        temp2 = (middle - ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width;
+        do{
+          //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = PeakColour[peak_lookup[peaklevel[i]][peakchange[i]]];
+          rgbbuffer[temp + x] = copycolour;
+          rgbbuffer[temp2 + x] = copycolour;
+          //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = FreqBarColour[peaklevel[i]]; // use Frequency Bar colour
+          //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = FreqBarColour[(int)(peakchange[i] * peak_fade_scaler)]; // fade-out Frequency Bar colour
+        }while(++x < x_stop);
       }
     }
-    //trippycolour = (trippycolour + (576 / bands)) % 576;
 
-    //for(tx = x + 1; tx < i * (band_width + x_spacing) + band_width; tx++)
-    //  for(y = 0; y < (int)(level[i] / (255.0f / draw_height)); y += y_spacing)
-    //    rgbbuffer[y * 576 + tx] = rgbbuffer[y * 576 + x];
-    //    //CopyMemory(&rgbbuffer[y * 576 + tx], &rgbbuffer[y * 576 + x], 4);
-    // reordering the for loops made a big difference in performance (suspect better cache hit)
-    //for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-    //  copycolour = rgbbuffer[y * image_width + x];
-    //  for(tx = x + 1; tx < i * (band_width + x_spacing) + band_width; tx++)
-    //    rgbbuffer[y * image_width + tx] = copycolour;
-    //    //CopyMemory(&rgbbuffer[y * 576 + tx], &rgbbuffer[y * 576 + x], 4);
-    //}
-
-    if(peaklevel[i]) {
-      copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width;
-      temp2 = (middle - ((int)(peaklevel[i] / draw_height_scaler) / 2 / y_spacing) * y_spacing) * image_width;
-      do{
-        //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = PeakColour[peak_lookup[peaklevel[i]][peakchange[i]]];
-        rgbbuffer[temp + x] = copycolour;
-        rgbbuffer[temp2 + x] = copycolour;
-        //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = FreqBarColour[peaklevel[i]]; // use Frequency Bar colour
-        //rgbbuffer[(int)(peaklevel[i] / height_scale / y_spacing) * y_spacing * 576 + x] = FreqBarColour[(int)(peakchange[i] * peak_fade_scaler)]; // fade-out Frequency Bar colour
-      }while(++x < x_stop);
-    }
+    //++trippycolourbase %= 576;
   }
-
-  //++trippycolourbase %= 576;
 }
 
 void CalculateDarkMirrorAuxColours(void)
@@ -1621,58 +1646,61 @@ void CalculateDarkMirrorAuxColours(void)
 
 void RenderSingleBarsDarkMirror()
 {
-  const int middle = (draw_height / 3 / y_spacing) * y_spacing;
+  if (rgbbuffer) {
+    const int middle = (draw_height / 3 / y_spacing) * y_spacing;
 
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
-	  _ASSERT(y * 3 / 2 < 255);
-      rgbbuffer[(middle - y / 2) / y_spacing * y_spacing * image_width + x] = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
-      rgbbuffer[(middle + y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
-    }
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
+        _ASSERT(y * 3 / 2 < 255);
+        rgbbuffer[(middle - y / 2) / y_spacing * y_spacing * image_width + x] = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
+        rgbbuffer[(middle + y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
+      }
 
-    if(peaklevel[i]) {
-      rgbbuffer[(middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width + x] = AuxColour[1][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      //rgbbuffer[(middle - ((int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing) * image_width + x] = AuxColour[1][peak_lookup[peaklevel[i]][peakchange[i]]];
-      rgbbuffer[(middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+      if(peaklevel[i]) {
+        rgbbuffer[(middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width + x] = AuxColour[1][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        //rgbbuffer[(middle - ((int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing) * image_width + x] = AuxColour[1][peak_lookup[peaklevel[i]][peakchange[i]]];
+        rgbbuffer[(middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+      }
     }
   }
 }
 
 void RenderWideBarsDarkMirror()
 {
-  // note that middle is actually 1/3 of the screen.  The dark reflection is in the bottom
-  // 1/3 of the screen and the top 2/3 is the full colour bars.
-  const int middle = (draw_height / 3 / y_spacing) * y_spacing;
-  COLORREF copycolour, copycolour2;
+  if (rgbbuffer) {
+    // note that middle is actually 1/3 of the screen.  The dark reflection is in the bottom
+    // 1/3 of the screen and the top 2/3 is the full colour bars.
+    const int middle = (draw_height / 3 / y_spacing) * y_spacing;
 
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    int x_stop = i * total_width + band_width;
-    for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
-	  _ASSERT(y * 3 / 2 < 255);
-      copycolour = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
-      copycolour2 = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
-      int temp = (middle + y) * image_width;
-      int temp2 = (middle - y / 2) / y_spacing * y_spacing * image_width;
-      for(int tx = x; tx < x_stop; tx++) {
-        rgbbuffer[temp2 + tx] = copycolour2;
-        rgbbuffer[temp + tx] = copycolour;
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      const int x_stop = i * total_width + band_width;
+      for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
+	    _ASSERT(y * 3 / 2 < 255);
+        const COLORREF copycolour = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
+        const COLORREF copycolour2 = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
+        int temp = (middle + y) * image_width;
+        int temp2 = (middle - y / 2) / y_spacing * y_spacing * image_width;
+        for(int tx = x; tx < x_stop; tx++) {
+          rgbbuffer[temp2 + tx] = copycolour2;
+          rgbbuffer[temp + tx] = copycolour;
+        }
       }
-    }
 
-    if(peaklevel[i]) {
-      copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      copycolour2 = AuxColour[1][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      int temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width;
-      // note: *2/6 is used as a reduced *2/3*2 in order to calculate the location for the peak
-      // if reduced to just /3 then with some window heights the bars will be drawn higher than
-      // the peaks due to rounding errors.
-      int temp2 = (middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width;
-      do{
-        rgbbuffer[temp2 + x] = copycolour2;
-        rgbbuffer[temp + x] = copycolour;
-      }while(++x < x_stop);
+      if(peaklevel[i]) {
+        const COLORREF copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        const COLORREF copycolour2 = AuxColour[1][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        int temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width;
+        // note: *2/6 is used as a reduced *2/3*2 in order to calculate the location for the peak
+        // if reduced to just /3 then with some window heights the bars will be drawn higher than
+        // the peaks due to rounding errors.
+        int temp2 = (middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width;
+        do{
+          rgbbuffer[temp2 + x] = copycolour2;
+          rgbbuffer[temp + x] = copycolour;
+        }while(++x < x_stop);
+      }
     }
   }
 }
@@ -1720,26 +1748,28 @@ void RenderSingleBarsWaveyReflection()
     }
   }
 
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    int wave = wavestart;   // restart the wave drawing offset
-    for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
-	  _ASSERT(y * 3 / 2 < 255);
-	  if(x > 1 && x < draw_width - 2 && y / 2 > 0)
-        rgbbuffer[(middle - y / 2) / y_spacing * y_spacing * image_width + x + waves[wave] / wavedivisor] = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
-      draw_y = !draw_y; // since y is halved, only update the wave index counter for
-      if(draw_y)        // every second y value so that the full waves are always seen
-        ++wave %= 16;
-      rgbbuffer[(middle + y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
-    }
-
-    if(peaklevel[i]) {
-      if(x > 1 && x < draw_width - 2) {
-        wave = (peaklevel[i] / 6 + wavestart) % 16;
-        rgbbuffer[(middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width + x + waves[wave] / wavedivisor] = AuxColour[2][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      int wave = wavestart;   // restart the wave drawing offset
+      for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
+	    _ASSERT(y * 3 / 2 < 255);
+	    if(x > 1 && x < draw_width - 2 && y / 2 > 0)
+          rgbbuffer[(middle - y / 2) / y_spacing * y_spacing * image_width + x + waves[wave] / wavedivisor] = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
+        draw_y = !draw_y; // since y is halved, only update the wave index counter for
+        if(draw_y)        // every second y value so that the full waves are always seen
+          ++wave %= 16;
+        rgbbuffer[(middle + y) * image_width + x] = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
       }
-      //rgbbuffer[(middle - ((int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing) * image_width + x] = AuxColour[1][peak_lookup[peaklevel[i]][peakchange[i]]];
-      rgbbuffer[(middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+
+      if(peaklevel[i]) {
+        if(x > 1 && x < draw_width - 2) {
+          wave = (peaklevel[i] / 6 + wavestart) % 16;
+          rgbbuffer[(middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width + x + waves[wave] / wavedivisor] = AuxColour[2][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        }
+        //rgbbuffer[(middle - ((int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing) * image_width + x] = AuxColour[1][peak_lookup[peaklevel[i]][peakchange[i]]];
+        rgbbuffer[(middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+      }
     }
   }
 }
@@ -1753,8 +1783,8 @@ void RenderWideBarsWaveyReflection()
   static const int wavechange[4] = {0,18,32,0};
   static int wavestart = 2, wavedivisor = 3, oldvolume = 0;
   bool draw_y = true;
-  int middle = (draw_height / 3 / y_spacing) * y_spacing, volume = 0;
-  COLORREF copycolour, copycolour2;
+  const int middle = (draw_height / 3 / y_spacing) * y_spacing;
+  int volume = 0;
 
   //if(!(wavestart--))
   wavestart -= 2;
@@ -1778,40 +1808,42 @@ void RenderWideBarsWaveyReflection()
     }
   }
 
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    int x_stop = x + band_width;
-    int wave = wavestart;
-    for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
-	  _ASSERT(y * 3 / 2 < 255);
-      copycolour = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
-      copycolour2 = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
-      int temp = (middle + y) * image_width;
-      int temp2 = (middle - y / 2) / y_spacing * y_spacing * image_width + waves[wave] / wavedivisor;
-      for(int tx = x; tx < x_stop; tx++) {
-        if(tx > 1 && tx < draw_width - 2 && y / 2 > 0)
-          rgbbuffer[temp2 + tx] = copycolour2;
-        rgbbuffer[temp + tx] = copycolour;
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      int x_stop = x + band_width;
+      int wave = wavestart;
+      for(int y = 0; y < (int)(level[i] / level_height_scaler) * 2 / 3; y += y_spacing) {
+	    _ASSERT(y * 3 / 2 < 255);
+        const COLORREF copycolour = FreqBarColour[colour_lookup[level[i]][y * 3 / 2]];
+        const COLORREF copycolour2 = AuxColour[0][colour_lookup[level[i]][y * 3 / 2]];
+        const int temp = (middle + y) * image_width;
+        const int temp2 = (middle - y / 2) / y_spacing * y_spacing * image_width + waves[wave] / wavedivisor;
+        for(int tx = x; tx < x_stop; tx++) {
+          if(tx > 1 && tx < draw_width - 2 && y / 2 > 0)
+            rgbbuffer[temp2 + tx] = copycolour2;
+          rgbbuffer[temp + tx] = copycolour;
+        }
+        draw_y = !draw_y; // since y is halved, only update the wave index counter for
+        if(draw_y)        // every second y value so that the full waves are always seen
+          ++wave %= 16;
       }
-      draw_y = !draw_y; // since y is halved, only update the wave index counter for
-      if(draw_y)        // every second y value so that the full waves are always seen
-        ++wave %= 16;
-    }
 
-    if(peaklevel[i]) {
-      wave = (peaklevel[i] / 6 + wavestart) % 16;
-      copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      copycolour2 = AuxColour[2][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      int temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width;
-      // note: *2/6 is used as a reduced *2/3*2 in order to calculate the location for the peak
-      // if reduced to just /3 then with some window heights the bars will be drawn higher than
-      // the peaks due to rounding errors.
-      int temp2 = (middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width + waves[wave] / wavedivisor;
-      do{
-        if(x > 1 && x < draw_width - 2)
-          rgbbuffer[temp2 + x] = copycolour2;
-        rgbbuffer[temp + x] = copycolour;
-      }while(++x < x_stop);
+      if(peaklevel[i]) {
+        wave = (peaklevel[i] / 6 + wavestart) % 16;
+        const COLORREF copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        const COLORREF copycolour2 = AuxColour[2][peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        const int temp = (middle + ((int)(peaklevel[i] / draw_height_scaler) * 2 / 3) / y_spacing * y_spacing) * image_width;
+        // note: *2/6 is used as a reduced *2/3*2 in order to calculate the location for the peak
+        // if reduced to just /3 then with some window heights the bars will be drawn higher than
+        // the peaks due to rounding errors.
+        const int temp2 = (middle - (int)(peaklevel[i] / level_height_scaler) * 2 / 6) / y_spacing * y_spacing * image_width + waves[wave] / wavedivisor;
+        do{
+          if(x > 1 && x < draw_width - 2)
+            rgbbuffer[temp2 + x] = copycolour2;
+          rgbbuffer[temp + x] = copycolour;
+        }while(++x < x_stop);
+      }
     }
   }
 }
@@ -1827,62 +1859,64 @@ void CalculateShadowAuxColours(void)
 
 void RenderSingleBarsShadow()
 {
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
 
-    if(levelbuffer[1][i] < level[i])
-      levelbuffer[1][i] = level[i];
-    else
-      levelbuffer[1][i]--;
+      if(levelbuffer[1][i] < level[i])
+        levelbuffer[1][i] = level[i];
+      else
+        levelbuffer[1][i]--;
 
-	for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      rgbbuffer[y * image_width + x] = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
-	}
+	  for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        rgbbuffer[y * image_width + x] = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
+	  }
 
-	for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
-	}
+	  for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
+	  }
 
-    if(peaklevel[i])
-      rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+      if(peaklevel[i])
+        rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+    }
   }
 }
 
 void RenderWideBarsShadow()
 {
-  COLORREF copycolour;
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      const int x_stop = i * total_width + band_width;
 
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    int x_stop = i * total_width + band_width;
+      if(levelbuffer[1][i] < level[i])
+        levelbuffer[1][i] = level[i];
+      else
+        levelbuffer[1][i]--;
 
-    if(levelbuffer[1][i] < level[i])
-      levelbuffer[1][i] = level[i];
-    else
-      levelbuffer[1][i]--;
+      for(int y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        const COLORREF copycolour = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
+        for(int tx = x; tx < x_stop; tx++)
+          rgbbuffer[y * image_width + tx] = copycolour;
+      }
 
-    for(int y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      copycolour = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
-      for(int tx = x; tx < x_stop; tx++)
-        rgbbuffer[y * image_width + tx] = copycolour;
-    }
+      for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        const COLORREF copycolour = FreqBarColour[colour_lookup[level[i]][y]];
+        for(int tx = x; tx < x_stop; tx++)
+          rgbbuffer[y * image_width + tx] = copycolour;
+      }
 
-    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      copycolour = FreqBarColour[colour_lookup[level[i]][y]];
-      for(int tx = x; tx < x_stop; tx++)
-        rgbbuffer[y * image_width + tx] = copycolour;
-    }
-
-    if(peaklevel[i]) {
-      copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
-      do{
-        rgbbuffer[temp + x] = copycolour;
-      }while(++x < x_stop);
+      if(peaklevel[i]) {
+        const COLORREF copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        const int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
+        do{
+          rgbbuffer[temp + x] = copycolour;
+        }while(++x < x_stop);
+      }
     }
   }
 }
@@ -1907,66 +1941,68 @@ void CalculateFadeShadowAuxColours(void)
 
 void RenderSingleBarsFadeShadow()
 {
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      const int x = i * total_width;
 
-    if(levelbuffer[1][i] < level[i] || !(levelbuffer[2][i]--)) {
-      levelbuffer[1][i] = level[i];
-      levelbuffer[2][i] = 23;
+      if(levelbuffer[1][i] < level[i] || !(levelbuffer[2][i]--)) {
+        levelbuffer[1][i] = level[i];
+        levelbuffer[2][i] = 23;
+      }
+      //else
+      //  levelbuffer[1][i]--;
+
+	  for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+ 	    _ASSERT(y < 255);
+        rgbbuffer[y * image_width + x] = SmallAuxColour[levelbuffer[2][i] / 4][colour_lookup[levelbuffer[1][i]][y] / 2];
+	  }
+
+	  for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
+	  }
+
+      if(peaklevel[i])
+        rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
     }
-    //else
-    //  levelbuffer[1][i]--;
-
-	for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      rgbbuffer[y * image_width + x] = SmallAuxColour[levelbuffer[2][i] / 4][colour_lookup[levelbuffer[1][i]][y] / 2];
-	}
-
-	for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
-	}
-
-    if(peaklevel[i])
-      rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
   }
 }
 
 void RenderWideBarsFadeShadow()
 {
-  COLORREF copycolour;
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      const int x_stop = i * total_width + band_width;
 
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    int x_stop = i * total_width + band_width;
+      if(levelbuffer[1][i] < level[i] || !(levelbuffer[2][i]--)) {
+        levelbuffer[1][i] = level[i];
+        levelbuffer[2][i] = 23;
+      }
+      //else
+      //  levelbuffer[1][i]--;
 
-    if(levelbuffer[1][i] < level[i] || !(levelbuffer[2][i]--)) {
-      levelbuffer[1][i] = level[i];
-      levelbuffer[2][i] = 23;
-    }
-    //else
-    //  levelbuffer[1][i]--;
+      for(int y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        const COLORREF copycolour = SmallAuxColour[levelbuffer[2][i] / 4][colour_lookup[levelbuffer[1][i]][y] / 2];
+        for(int tx = x; tx < x_stop; tx++)
+          rgbbuffer[y * image_width + tx] = copycolour;
+      }
 
-    for(int y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      copycolour = SmallAuxColour[levelbuffer[2][i] / 4][colour_lookup[levelbuffer[1][i]][y] / 2];
-      for(int tx = x; tx < x_stop; tx++)
-        rgbbuffer[y * image_width + tx] = copycolour;
-    }
+      for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        const COLORREF copycolour = FreqBarColour[colour_lookup[level[i]][y]];
+        for(int tx = x; tx < x_stop; tx++)
+          rgbbuffer[y * image_width + tx] = copycolour;
+      }
 
-    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      copycolour = FreqBarColour[colour_lookup[level[i]][y]];
-      for(int tx = x; tx < x_stop; tx++)
-        rgbbuffer[y * image_width + tx] = copycolour;
-    }
-
-    if(peaklevel[i]) {
-      copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
-      do{
-        rgbbuffer[temp + x] = copycolour;
-      }while(++x < x_stop);
+      if(peaklevel[i]) {
+        const COLORREF copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        const int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
+        do{
+          rgbbuffer[temp + x] = copycolour;
+        }while(++x < x_stop);
+      }
     }
   }
 }
@@ -1986,87 +2022,89 @@ void CalculateDoubleShadowAuxColours(void)
 
 void RenderSingleBarsDoubleShadow()
 {
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      const int x = i * total_width;
 
-    if(levelbuffer[2][i] < level[i])
-      levelbuffer[2][i] = level[i];
-    else {
-      levelbuffer[2][i] -= 2;
-      if(levelbuffer[2][i] < 0)
-        levelbuffer[2][i] = 0;
+      if(levelbuffer[2][i] < level[i])
+        levelbuffer[2][i] = level[i];
+      else {
+        levelbuffer[2][i] -= 2;
+        if(levelbuffer[2][i] < 0)
+          levelbuffer[2][i] = 0;
+      }
+
+      if(levelbuffer[1][i] < levelbuffer[2][i])
+        levelbuffer[1][i] = levelbuffer[2][i];
+      else
+        levelbuffer[1][i]--;
+
+	  for(int y = (int)(levelbuffer[2][i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        rgbbuffer[y * image_width + x] = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
+	  }
+
+	  for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[2][i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        rgbbuffer[y * image_width + x] = AuxColour[1][colour_lookup[levelbuffer[2][i]][y]];
+	  }
+
+	  for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+	    _ASSERT(y < 255);
+        rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
+	  }
+
+      if(peaklevel[i])
+        rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
     }
-
-    if(levelbuffer[1][i] < levelbuffer[2][i])
-      levelbuffer[1][i] = levelbuffer[2][i];
-    else
-      levelbuffer[1][i]--;
-
-	for(int y = (int)(levelbuffer[2][i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      rgbbuffer[y * image_width + x] = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
-	}
-
-	for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[2][i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      rgbbuffer[y * image_width + x] = AuxColour[1][colour_lookup[levelbuffer[2][i]][y]];
-	}
-
-	for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-	  _ASSERT(y < 255);
-      rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
-	}
-
-    if(peaklevel[i])
-      rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
   }
 }
 
 void RenderWideBarsDoubleShadow()
 {
-  COLORREF copycolour;
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      int x = i * total_width;
+      const int x_stop = i * total_width + band_width;
 
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
-    int x_stop = i * total_width + band_width;
+      if(levelbuffer[2][i] < level[i])
+        levelbuffer[2][i] = level[i];
+      else {
+        levelbuffer[2][i] -= 2;
+        if(levelbuffer[2][i] < 0)
+          levelbuffer[2][i] = 0;
+      }
 
-    if(levelbuffer[2][i] < level[i])
-      levelbuffer[2][i] = level[i];
-    else {
-      levelbuffer[2][i] -= 2;
-      if(levelbuffer[2][i] < 0)
-        levelbuffer[2][i] = 0;
-    }
+      if(levelbuffer[1][i] < levelbuffer[2][i])
+        levelbuffer[1][i] = levelbuffer[2][i];
+      else
+        levelbuffer[1][i]--;
 
-    if(levelbuffer[1][i] < levelbuffer[2][i])
-      levelbuffer[1][i] = levelbuffer[2][i];
-    else
-      levelbuffer[1][i]--;
+      for(int y = (int)(levelbuffer[2][i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
+        const COLORREF copycolour = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
+        for(int tx = x; tx < x_stop; tx++)
+          rgbbuffer[y * image_width + tx] = copycolour;
+      }
 
-    for(int y = (int)(levelbuffer[2][i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing) {
-      copycolour = AuxColour[0][colour_lookup[levelbuffer[1][i]][y]];
-      for(int tx = x; tx < x_stop; tx++)
-        rgbbuffer[y * image_width + tx] = copycolour;
-    }
+      for(int y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[2][i] / level_height_scaler); y += y_spacing) {
+        const COLORREF copycolour = AuxColour[1][colour_lookup[levelbuffer[2][i]][y]];
+        for(int tx = x; tx < x_stop; tx++)
+          rgbbuffer[y * image_width + tx] = copycolour;
+      }
 
-    for(int y = (int)(level[i] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[2][i] / level_height_scaler); y += y_spacing) {
-      copycolour = AuxColour[1][colour_lookup[levelbuffer[2][i]][y]];
-      for(int tx = x; tx < x_stop; tx++)
-        rgbbuffer[y * image_width + tx] = copycolour;
-    }
+      for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+        const COLORREF copycolour = FreqBarColour[colour_lookup[level[i]][y]];
+        for(int tx = x; tx < x_stop; tx++)
+          rgbbuffer[y * image_width + tx] = copycolour;
+      }
 
-    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-      copycolour = FreqBarColour[colour_lookup[level[i]][y]];
-      for(int tx = x; tx < x_stop; tx++)
-        rgbbuffer[y * image_width + tx] = copycolour;
-    }
-
-    if(peaklevel[i]) {
-      copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
-      do{
-        rgbbuffer[temp + x] = copycolour;
-      }while(++x < x_stop);
+      if(peaklevel[i]) {
+        const COLORREF copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        const int temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
+        do{
+          rgbbuffer[temp + x] = copycolour;
+        }while(++x < x_stop);
+      }
     }
   }
 }
@@ -2095,22 +2133,24 @@ void RenderSingleBarsSmoke()
     movesmoke = total_width;
   }
 
-  for(int i = 0; i < bands; i++) {
-    int x = i * total_width;
+  if (rgbbuffer) {
+    for(int i = 0; i < bands; i++) {
+      const int x = i * total_width;
 
-    if(levelbuffer[1][i] < level[i])
-      levelbuffer[1][i] = level[i];
-    else
-      levelbuffer[1][i] -= m_rand() % 4;
+      if(levelbuffer[1][i] < level[i])
+        levelbuffer[1][i] = level[i];
+      else
+        levelbuffer[1][i] -= m_rand() % 4;
 
-    for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing)
-      rgbbuffer[y * image_width + x] = SmallAuxColour[levelbuffer[1][i] / 72][colour_lookup[levelbuffer[1][i]][y] / 2];
+      for(int y = (int)(level[i] / level_height_scaler) / y_spacing * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing)
+        rgbbuffer[y * image_width + x] = SmallAuxColour[levelbuffer[1][i] / 72][colour_lookup[levelbuffer[1][i]][y] / 2];
 
-    for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing)
-      rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
+      for(int y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing)
+        rgbbuffer[y * image_width + x] = FreqBarColour[colour_lookup[level[i]][y]];
 
-    if(peaklevel[i])
-      rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+      if(peaklevel[i])
+        rgbbuffer[(int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width + x] = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+    }
   }
 }
 
@@ -2119,8 +2159,8 @@ void RenderWideBarsSmoke()
   // note: 54 is used to calculate the Aux Colour since 64 = 255/4
   //static int windchange = 10, winddirection = -1, windfalloff = 7, falloffchange = 5;
   static int movesmoke = 1;
-  int i, x, y, tx, temp, x_stop, smokebars = bands * band_width;
-  COLORREF copycolour;
+  int i, x, y, tx, temp;
+  const int smokebars = bands * band_width;
 
   //if(!(--windchange)) {
   //  windchange = random(30) + 1;
@@ -2152,40 +2192,42 @@ void RenderWideBarsSmoke()
   //  windfalloff = random(7) + 1;
   //}
 
-  i = 0;
-  for(x = 0; x < draw_width; x += total_width) {
-    x_stop = x + band_width;
-    for(tx = x; tx < x_stop; tx++, i++) {
+  if (rgbbuffer) {
+    i = 0;
+    for(x = 0; x < draw_width; x += total_width) {
+      const int x_stop = x + band_width;
+      for(tx = x; tx < x_stop; tx++, i++) {
 
-      if(levelbuffer[1][i] < level[i / band_width])
-        levelbuffer[1][i] = level[i / band_width];
-      else
-        levelbuffer[1][i] -= m_rand() % 4;
+        if(levelbuffer[1][i] < level[i / band_width])
+          levelbuffer[1][i] = level[i / band_width];
+        else
+          levelbuffer[1][i] -= m_rand() % 4;
 
-      for(y = (int)(level[i / band_width] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing)
-        rgbbuffer[y * image_width + tx] = SmallAuxColour[levelbuffer[1][i] / 72][colour_lookup[levelbuffer[1][i]][y] / 2];
-        //copycolour = SmallAuxColour[levelbuffer[1][i] / 72][colour_lookup[levelbuffer[1][i]][y] / 2];
-        //for(tx = x; tx < x_stop; tx++)
-        //  rgbbuffer[y * image_width + tx] = copycolour;
-    }
-  }
-
-  for(i = 0; i < bands; i++) {
-    x = i * total_width;
-    x_stop = i * total_width + band_width;
-
-    for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
-      copycolour = FreqBarColour[colour_lookup[level[i]][y]];
-      for(tx = x; tx < x_stop; tx++)
-        rgbbuffer[y * image_width + tx] = copycolour;
+        for(y = (int)(level[i / band_width] / level_height_scaler / y_spacing) * y_spacing; y < (int)(levelbuffer[1][i] / level_height_scaler); y += y_spacing)
+          rgbbuffer[y * image_width + tx] = SmallAuxColour[levelbuffer[1][i] / 72][colour_lookup[levelbuffer[1][i]][y] / 2];
+          //copycolour = SmallAuxColour[levelbuffer[1][i] / 72][colour_lookup[levelbuffer[1][i]][y] / 2];
+          //for(tx = x; tx < x_stop; tx++)
+          //  rgbbuffer[y * image_width + tx] = copycolour;
+      }
     }
 
-    if(peaklevel[i]) {
-      copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
-      temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
-      do{
-        rgbbuffer[temp + x] = copycolour;
-      }while(++x < x_stop);
+    for(i = 0; i < bands; i++) {
+      x = i * total_width;
+      const int x_stop = i * total_width + band_width;
+
+      for(y = 0; y < (int)(level[i] / level_height_scaler); y += y_spacing) {
+        const COLORREF copycolour = FreqBarColour[colour_lookup[level[i]][y]];
+        for(tx = x; tx < x_stop; tx++)
+          rgbbuffer[y * image_width + tx] = copycolour;
+      }
+
+      if(peaklevel[i]) {
+        const COLORREF copycolour = PeakColour[peak_lookup[peakreferencelevel[i]][peakchange[i]]];
+        temp = (int)(peaklevel[i] / draw_height_scaler / y_spacing) * y_spacing * image_width;
+        do{
+          rgbbuffer[temp + x] = copycolour;
+        }while(++x < x_stop);
+      }
     }
   }
 }
@@ -2216,7 +2258,7 @@ void PeakLevelFall()
     for(int i = 0; i <= level_dur; i++)
       peak_level_lookup[_level][peak_level_length[_level] - i] = (short)_level;
 
-    for(int i = level_dur + 1, y = _level - fall_speed; i <= peak_level_length[_level]; i++, y -= fall_speed) {
+    for (int i = level_dur + 1, y = _level - fall_speed; i <= peak_level_length[_level]; i++, y -= fall_speed) {
       if (!peakfalloffmode) {
         // original linear change
         peak_level_lookup[_level][peak_level_length[_level] - i] = (short)y;
@@ -2407,8 +2449,8 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				win_height = r.bottom - r.top;
                 if ((win_width > 2) && (win_height > 2))
                 {
-				CalculateAndUpdate();
-			}
+                    CalculateAndUpdate();
+                }
 			}
 			return 0;
 		case WM_COMMAND:
@@ -2534,7 +2576,7 @@ void SetDlgItemFloatText(HWND hwndDlg, int nDlgItem, float fValue)
 {
 	// TODO deal with localisation quirks?
 	wchar_t sz[64] = {0};
-	_snwprintf(sz, 64, L"%.2f", (double)fValue);
+	_snwprintf(sz, ARRAYSIZE(sz), L"%.2f", (double)fValue);
 	SetDlgItemText(hwndDlg, nDlgItem, sz);
 }
 
@@ -4121,7 +4163,7 @@ void DrawLevelGraph(HWND hwndDlg, const int *table)
 
   // fill it black
   RECT rect = {0, 0, 256, 256};
-  FillRectWithColour(mDC, &rect, RGB(0, 0, 0));
+  FillRectWithColour(mDC, &rect, RGB(0, 0, 0), TRUE);
 
   // draw the graph
   for(int i = 0; i < 256; i++)
@@ -4172,7 +4214,7 @@ void DrawSolidColour(HWND hwndDlg, COLORREF colour, int identifier)
   ReleaseDC(NULL, hdcScreen);
 
   // fill it
-  FillRectWithColour(mDC, &rect, RGB(GetBValue(colour), GetGValue(colour), GetRValue(colour)));
+  FillRectWithColour(mDC, &rect, RGB(GetBValue(colour), GetGValue(colour), GetRValue(colour)), TRUE);
 
   // copy it back to the window
   SendDlgItemMessage(hwndDlg, identifier, STM_SETIMAGE, (WPARAM) IMAGE_BITMAP, (LPARAM) bitmap);
@@ -4250,10 +4292,10 @@ void AboutMessage(void)
 {
 #ifdef WACUP_BUILD
 	// TODO localise
-	wchar_t message[1024] = {0};
+    wchar_t message[1024] = { 0 };
 	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer "
                L"plug-in originally\nby Mike Lynch (Copyright © 2007-2018)\n\n"
-               L"Updated by Darren Owen aka DrO for\nWACUP (Copyright © 2018-"
+               L"Updated by " WACUP_AUTHOR_STRW L" for\nWACUP (Copyright © 2018-"
                WACUP_COPYRIGHT L")\n\nhttps://github.com/WACUP/vis_classic\n\n"
 			   L"Build date: %s", TEXT(__DATE__));
 	AboutMessageBox(hatan, message, L"Classic Spectrum Analyzer");

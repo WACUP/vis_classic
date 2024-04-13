@@ -2,12 +2,12 @@ extern int draw_height;
 
 unsigned char BarColourClassic(int, int y)
 {
-          return (unsigned char)(y);  // classic
+  return (unsigned char)(y);  // classic
 }
 
 unsigned char BarColourLines(int i, int)
 {
-          return (unsigned char)i;  // whole line fading
+  return (unsigned char)i;  // whole line fading
 }
 
 unsigned char BarColourElevator(int i, int y)
@@ -39,10 +39,10 @@ unsigned char BarColourFire(int i, int y)
     return (unsigned char)((255 / draw_height) * 255 / i);
   }
 
-   return (unsigned char)(y * 255 / i);  // Faded Bars - my fire
+  return (unsigned char)(y * 255 / i);  // Faded Bars - my fire
 }
 
 unsigned char BarColourWinampFire(int i, int y)
 {
-          return (unsigned char)(y + 255 - i); // Winamp fire style;
+  return (unsigned char)(y + 255 - i); // Winamp fire style;
 }

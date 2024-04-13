@@ -264,8 +264,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,1,10,0
- PRODUCTVERSION 2,1,10,0
+ FILEVERSION 2,1,12,0
+ PRODUCTVERSION 2,1,12,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -282,12 +282,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "WACUP"
             VALUE "FileDescription", "Winamp Visualization Plug-in"
-            VALUE "FileVersion", "2.1.10.0"
-            VALUE "InternalName", "Classic Spectrum Analyser"
-            VALUE "LegalCopyright", "Copyright © 1998-2019 Mike Lynch. Modifications by Darren Owen aka DrO © 2018-2023"
+            VALUE "FileVersion", "2.1.12.0"
+            VALUE "InternalName", "vis_classic.dll"
+            VALUE "LegalCopyright", "Copyright © 1998-2019 Mike Lynch. Modifications by Darren Owen aka DrO © 2018-2024"
             VALUE "OriginalFilename", "vis_classic.dll"
             VALUE "ProductName", "Classic Spectrum Analyser"
-            VALUE "ProductVersion", "2.1.10.0"
+            VALUE "ProductVersion", "2.1.12.0"
         END
     END
     BLOCK "VarFileInfo"

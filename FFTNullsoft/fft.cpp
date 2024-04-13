@@ -309,7 +309,7 @@ void FFT::time_to_frequency_domain(const float *in_wavedata, float *out_spectral
             }
 
             const float wtemp = wr;
-	    wr = wr*wpr - wi*wpi;
+            wr = wr*wpr - wi*wpi;
             wi = wi*wpr + wtemp*wpi;
         }
 
