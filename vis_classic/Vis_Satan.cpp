@@ -74,8 +74,6 @@ TODO: faster file saving would be nice
 #include "resource.h"
 #include "api.h"
 
-#include <../wacup_version.h>
-
 // this is used to identify the skinned frame to allow for embedding/control by modern skins if needed
 // note: this is taken from vis_milk2 so that by having a GUID on the window, the embedding of ths vis
 //		 window will work which if we don't set a guid is fine but that prevents other aspects of the
@@ -195,7 +193,7 @@ winampVisModule AtAnSt_Vis_mod = {
 	NULL,	// hDllInstance
 	0,	// sRate
 	0,	// nCh
-	10,	// latencyMS
+	0,	// latencyMS
 	15,	// delayMS
 	0,	// spectrumNch
 	2,	// waveformNch
@@ -233,7 +231,7 @@ double height_scale = 1.0f, draw_height_scaler = 1.0f, peak_fade_scaler = 1.0f;
 float level_height_scaler = 1.0f;
 int peakchange[576 * 2] = {0};
 short int peakreferencelevel[576 * 2] = {0};
-int levelbuffer[3][576 * 2] = {0};
+int levelbuffer[3][576 * 4] = {0};
 int *level = levelbuffer[0];
 int peaklevelbuffer[3][576 * 2] = {0};
 int *peaklevel = peaklevelbuffer[0];
@@ -452,11 +450,8 @@ int AtAnStInit(winampVisModule *this_mod)
     // or it'll do weird things when trying to close it (aka crash)
     // otherwise have to call IPC_GET_EMBEDIF (slow) & then use the
     // returned method from it which sometimes doesn't work nicely
-    HWND parent = CreateEmbedWindow(&myWindowState);
+    HWND parent = CreateEmbedWindow(&myWindowState, L"Classic Spectrum Analyzer");		// TODO localise
 	if (IsWindow(parent)) {
-		// TODO localise
-		SetWindowText(myWindowState.me, L"Classic Spectrum Analyzer"); // set window title
-
 		// if the parent is minimised then this will
 		// help to prevent it appearing on screen as
 		// it otherwise looks odd showing on its own
@@ -4293,11 +4288,10 @@ void AboutMessage(void)
 #ifdef WACUP_BUILD
 	// TODO localise
     wchar_t message[1024] = { 0 };
-	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer "
-               L"plug-in originally\nby Mike Lynch (Copyright © 2007-2018)\n\n"
-               L"Updated by " WACUP_AUTHOR_STRW L" for\nWACUP (Copyright © 2018-"
-               WACUP_COPYRIGHT L")\n\nhttps://github.com/WACUP/vis_classic\n\n"
-			   L"Build date: %s", TEXT(__DATE__));
+	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer plug-in originally\n"
+               L"by Mike Lynch (Copyright © 2007-2018)\n\nUpdated by %s for\nWACUP (Copyright "
+               L"© 2018-%s)\n\nhttps://github.com/WACUP/vis_classic\n\nBuild date: %s",
+               WACUP_Author(), WACUP_Copyright(), TEXT(__DATE__));
 	AboutMessageBox(hatan, message, L"Classic Spectrum Analyzer");
 #else
 	MessageBox(hatan, L"Classic Spectrum Analyzer\n\nCopyright © 2007 Mike Lynch\n\n"
