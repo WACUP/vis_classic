@@ -171,7 +171,7 @@ static const GUID embed_guid =
 
 const wchar_t *cszClassName = L"ClassicSpectrum";
 const wchar_t *cszIniMainSection = L"Classic Analyzer";
-const wchar_t *cszIniFilename = L"Plugins\\vis_classic.ini";
+const wchar_t *cszIniFilename = L"vis_classic.ini";
 const wchar_t *cszCurrentSettings = L"Current Settings";
 #ifdef WACUP_BUILD
 const wchar_t *cszDefaultSettingsName = L"Classic";
@@ -422,7 +422,7 @@ int AtAnStInit(winampVisModule *this_mod)
 
 	// makes an absolute path to the ini file
 #ifdef WACUP_BUILD
-    CombinePath(szMainIniFilename, GetPaths()->settings_dir, cszIniFilename);
+    CombinePath(szMainIniFilename, GetPaths()->settings_sub_dir, cszIniFilename);
 #else
 	PathCombine(szMainIniFilename, (wchar_t*)SendMessage(this_mod->hwndParent, WM_WA_IPC, 0, IPC_GETINIDIRECTORYW), cszIniFilename);
 #endif
