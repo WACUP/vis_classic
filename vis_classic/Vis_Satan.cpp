@@ -183,6 +183,8 @@ const wchar_t *cszDefaultProfileMessage = L"Click on a profile to load it (any c
 										  L"to re-load the Current Settings (any changes will be discarded).";
 const int cnProfileNameBufLen = MAX_PROFILE_NAME_LENGTH + 1;
 
+const int fall_speed = 5;
+
 api_service* WASABI_API_SVC = NULL;
 
 SETUP_API_LNG_VARS;
@@ -512,8 +514,7 @@ int AtAnStInit(winampVisModule *this_mod)
             }
 
 			/*SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);/*/
-		    SendMessageTimeout(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND,
-				                    SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, 2000, NULL);/**/
+            SendMessageSafe(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND, 2000);
 
 			// to better match the current visible state of WACUP it's
 			// necessary to avoid showing our window when minimised :)
@@ -2239,7 +2240,6 @@ void PeakLevelNormal()
 // makes the peaks fall
 void PeakLevelFall()
 {
-  const int fall_speed = 5;
   int level_dur;
 
   for(int _level = 1; _level < 256; _level++) {
@@ -2269,7 +2269,6 @@ void PeakLevelFall()
 // makes the peaks rise
 void PeakLevelRise()
 {
-  const int fall_speed = 5;
   int level_dur;
 
   for(int _level = 1; _level < 256; _level++) {
@@ -2291,7 +2290,6 @@ void PeakLevelRise()
 // makes half the peaks fall and half rise
 void PeakLevelFallAndRise()
 {
-  const int fall_speed = 5;
   int level_dur;
 
   for(int _level = 1; _level < 256; _level++) {
@@ -2329,7 +2327,6 @@ void PeakLevelFallAndRise()
 // makes the peaks rise a bit then fall
 void PeakLevelRiseFall()
 {
-  const int fall_speed = 5;
   int level_dur;
 
   for(int _level = 1; _level < 256; _level++) {
@@ -3586,7 +3583,7 @@ void SaveDialog_UpdateProfilesProperty(void)
 
 void SaveDialog_LoadProfile(HWND hwndDlg)
 {
-	wchar_t szProfile[cnProfileNameBufLen];
+	wchar_t szProfile[cnProfileNameBufLen] = {0};
 	// check for text entered, and get it into selected
 	if(SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, WM_GETTEXT, cnProfileNameBufLen, (LPARAM)szProfile)) {
 		// look for exact match first
