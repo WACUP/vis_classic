@@ -486,7 +486,7 @@ int AtAnStInit(winampVisModule *this_mod)
 
 			// create the drawing buffer and initialize to 0
 			image_width = GetSystemMetrics(SM_CXSCREEN);
-			rgbbuffer = (COLORREF *)calloc(image_width * MAX_WIN_HEIGHT, sizeof(COLORREF));
+			rgbbuffer = (COLORREF *)calloc((size_t)(image_width * MAX_WIN_HEIGHT), sizeof(COLORREF));
 
 			// allocate bar colour lookup and peak table memory
 			colour_lookup[0] = 0; // no colour painted for a level of zero
@@ -513,8 +513,7 @@ int AtAnStInit(winampVisModule *this_mod)
                 bmi.bmiHeader.biHeight = MAX_WIN_HEIGHT;
             }
 
-			/*SendMessage(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND);/*/
-            SendMessageSafe(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, IPC_SETVISWND, 2000);
+            SendMessageSafe(this_mod->hwndParent, WM_WA_IPC, (WPARAM)hatan, (LPARAM)IPC_SETVISWND, 2000);
 
 			// to better match the current visible state of WACUP it's
 			// necessary to avoid showing our window when minimised :)
@@ -3278,11 +3277,11 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
       ReleaseDC(NULL, hdcScreen);
 
       SendDlgItemMessage(hwndDlg, IDC_LEFTSELECT, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
-      SendDlgItemMessage(hwndDlg, IDC_LEFTSELECT, TBM_SETPOS, (WPARAM)true, 255 - left);
+      SendDlgItemMessage(hwndDlg, IDC_LEFTSELECT, TBM_SETPOS, (WPARAM)true, (LPARAM)(255 - left));
       SetDlgItemText(hwndDlg, IDC_LEFTVAL, I2WStr(left, t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_RIGHTSELECT, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
-      SendDlgItemMessage(hwndDlg, IDC_RIGHTSELECT, TBM_SETPOS, (WPARAM)true, 255 - right);
+      SendDlgItemMessage(hwndDlg, IDC_RIGHTSELECT, TBM_SETPOS, (WPARAM)true, (LPARAM)(255 - right));
       SetDlgItemText(hwndDlg, IDC_RIGHTVAL, I2WStr(right, t, ARRAYSIZE(t)));
 
       SendDlgItemMessage(hwndDlg, IDC_RED, TBM_SETRANGE, (WPARAM)true, (LPARAM)MAKELONG(0, 255));
@@ -3301,10 +3300,8 @@ BOOL CALLBACK ColourDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lP
       // resize the Left & Right select track bars so the bar = exactly 255
       // to perfectly match the bitmap size
       RECT r = { 0 };
-      POINT p;
       GetDlgItemRect(hwndDlg, IDC_LEFTSELECT, &r);
-      p.x = r.left;
-      p.y = r.top;
+      POINT p = { r.left, r.top };
       ScreenToClient(hwndDlg, &p);
       r.left = p.x;
       r.top = p.y;
@@ -3610,7 +3607,7 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
     case WM_INITDIALOG: {
       DarkModeSetup(hwndDlg);
       // restrict maximum name length
-      SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_LIMITTEXT, cnProfileNameBufLen - 1, 0);
+      SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_LIMITTEXT, (WPARAM)(cnProfileNameBufLen - 1), 0);
 	  // set the text
       SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, WM_SETTEXT, 0, (LPARAM)szCurrentProfile);
       // load the profile names into the combo box
@@ -3782,12 +3779,12 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
 * file functions
 */
 // makes an absolute path to the profile directory (not ending in backslash)
-void GetProfilePath(wchar_t *szBuf)
+const wchar_t* GetProfilePath(wchar_t *szBuf)
 {
 #ifdef WACUP_BUILD
-	CombinePath(szBuf, GetPaths()->settings_sub_dir, L"vis_classic");
+	return CombinePath(szBuf, GetPaths()->settings_sub_dir, L"vis_classic");
 #else
-	PathCombine(szBuf, GetPaths()->settings_sub_dir, L"vis_classic");
+	return PathCombine(szBuf, GetPaths()->settings_sub_dir, L"vis_classic");
 #endif
 }
 
@@ -3804,17 +3801,6 @@ void GetProfileINIFilename(wchar_t *szBuf, const wchar_t *cszProfile)
 	}
 }
 
-int ProfileFileExists(const wchar_t *cszFilename)
-{
-	WIN32_FIND_DATA fd = {0};
-	HANDLE h = FindFirstFile(cszFilename, &fd);
-	if(h != INVALID_HANDLE_VALUE) {
-		FindClose(h);
-		return 0;
-	}
-	return GetLastError();
-}
-
 void DeleteProfile(const wchar_t *cszProfile)
 {
 	wchar_t szBuf[MAX_PATH] = {0};
@@ -3827,10 +3813,8 @@ void DeleteProfile(const wchar_t *cszProfile)
 
 HANDLE FindProfileFiles(LPWIN32_FIND_DATA pfd)
 {
-	wchar_t szPath[MAX_PATH] = {0};
-	GetProfilePath(szPath);
-    AppendOnPath(szPath, L"*.ini");
-	return FindFirstFile(szPath, pfd);
+	wchar_t szPath[MAX_PATH] = {0}, szTemp[MAX_PATH] = {0};
+	return SearchFolder(szTemp, GetProfilePath(szPath), L"*.ini", pfd);
 }
 
 void EnumProfilesToControl(HWND hDlg, int nIDDlgItem, UINT nMsg, UINT nSelMsg)
@@ -3914,9 +3898,8 @@ int LoadProfileIni(const wchar_t *cszProfile)
 
 	wchar_t szFilename[MAX_PATH] = {0};
 	GetProfileINIFilename(szFilename, cszProfile);
-	int error = ProfileFileExists(szFilename);
-	if(error)
-		return error;
+	if(!FileExists(szFilename))
+		return 1;
 
 	falloffrate = ReadPrivateProfileInt(cszIniMainSection, L"Falloff", falloffrate, 0, 75, szFilename);
 	peakchangerate = ReadPrivateProfileInt(cszIniMainSection, L"PeakChange", peakchangerate, 0, 255, szFilename);
