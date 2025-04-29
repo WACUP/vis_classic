@@ -1,4 +1,4 @@
-#define PLUGIN_VERSION " v2.1.17"
+#define PLUGIN_VERSION " v2.1.18"
 #ifndef _WIN64
 #define CS_MODULE_TITLE "Classic Spectrum Analyzer" PLUGIN_VERSION
 #else
@@ -87,7 +87,6 @@ void CalculateAndUpdate(void);
 // File functions
 void GetProfileINIFilename(wchar_t *szBuf, const wchar_t *cszProfile);
 int CreateProfileDirectory(void);
-int ProfileFileExists(const wchar_t *cszFilename);
 void DeleteProfile(const wchar_t *cszProfile);
 HANDLE FindProfileFiles(LPWIN32_FIND_DATAA pfd);
 void EnumProfilesToControl(HWND hDlg, int nIDDlgItem, UINT nMsg, UINT nSelMsg);

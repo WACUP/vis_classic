@@ -247,7 +247,7 @@ COLORREF AuxColour[3][256] = {0};
 COLORREF *SmallAuxColour[6] = {0};
 COLORREF FreqBarColour[256] = {0}, VolumeColour[256] = {0}, PeakColour[256] = {0};
 COLORREF UserColours[16] = {0};  // user defined colours for Pick Colour
-BITMAPINFO bmi = {0};
+BITMAPINFO bmi/* = {0}*/;
 void (*CalculateVariables)(void) = CalculateVariablesStereo;
 int (*LevelCalcStereo)(const int low, const int high, const unsigned char *spectrumData) = AverageLevelCalcStereo;
 int (*LevelCalcMono)(const int low, const int high, const unsigned char *spectrumDataLeft, const unsigned char *spectrumDataRight) = AverageLevelCalcMono;
@@ -486,7 +486,7 @@ int AtAnStInit(winampVisModule *this_mod)
 
 			// create the drawing buffer and initialize to 0
 			image_width = GetSystemMetrics(SM_CXSCREEN);
-			rgbbuffer = (COLORREF *)calloc((size_t)(image_width * MAX_WIN_HEIGHT), sizeof(COLORREF));
+			rgbbuffer = (COLORREF *)SafeMalloc((size_t)(image_width * MAX_WIN_HEIGHT) * sizeof(COLORREF));
 
 			// allocate bar colour lookup and peak table memory
 			colour_lookup[0] = 0; // no colour painted for a level of zero
@@ -3811,25 +3811,26 @@ void DeleteProfile(const wchar_t *cszProfile)
 	}
 }
 
-HANDLE FindProfileFiles(LPWIN32_FIND_DATA pfd)
+HANDLE FindProfileFiles(LPWIN32_FIND_DATA *pfd)
 {
-	wchar_t szPath[MAX_PATH] = {0}, szTemp[MAX_PATH] = {0};
-	return SearchFolder(szTemp, GetProfilePath(szPath), L"*.ini", pfd);
+	wchar_t szPath[MAX_PATH]/* = {0}*/, szTemp[MAX_PATH]/* = {0}*/;
+	return SearchFiles(szTemp, GetProfilePath(szPath), L"*.ini", pfd);
 }
 
 void EnumProfilesToControl(HWND hDlg, int nIDDlgItem, UINT nMsg, UINT nSelMsg)
 {
-	WIN32_FIND_DATA fd = {0};
+	LPWIN32_FIND_DATA fd = NULL;
 	HANDLE hFind = FindProfileFiles(&fd);
-	if(hFind != INVALID_HANDLE_VALUE) {
+	if(fd && (hFind != INVALID_HANDLE_VALUE)) {
 		do {
-			fd.cFileName[wcslen(fd.cFileName) - 4] = 0;
-			int n = (int)SendDlgItemMessage(hDlg, nIDDlgItem, nMsg, 0, (LPARAM)fd.cFileName);
-			if(nSelMsg && !_wcsicmp(fd.cFileName, szTempProfile))
+            fd->cFileName[wcslen(fd->cFileName) - 4] = 0;
+			int n = (int)SendDlgItemMessage(hDlg, nIDDlgItem,
+                          nMsg, 0, (LPARAM)fd->cFileName);
+			if(nSelMsg && !_wcsicmp(fd->cFileName, szTempProfile))
 				SendDlgItemMessage(hDlg, nIDDlgItem, nSelMsg, n, 0);
-		} while(FindNextFile(hFind, &fd));
-		FindClose(hFind);
+		} while(FindNextFile(hFind, fd));
 	}
+    SearchClose(hFind, fd);
 }
 
 // get the next and previous profile names relative to the current profile
@@ -3837,51 +3838,52 @@ void EnumProfilesToControl(HWND hDlg, int nIDDlgItem, UINT nMsg, UINT nSelMsg)
 // returns 0 on success, or GetLastError() value
 int GetRelativeProfiles(const wchar_t *szCurrent, wchar_t *szPrevious, wchar_t *szNext)
 {
-	WIN32_FIND_DATA fd = {0};
+	LPWIN32_FIND_DATA fd = NULL;
 	HANDLE hFind = FindProfileFiles(&fd);
-	if(hFind != INVALID_HANDLE_VALUE) {
+	if(fd && (hFind != INVALID_HANDLE_VALUE)) {
 		// init next and previous
 		if(szPrevious) *szPrevious = 0;
 		if(szNext) *szNext = 0;
 		// remove extension
-		fd.cFileName[wcslen(fd.cFileName) - 4] = 0;
+		fd->cFileName[wcslen(fd->cFileName) - 4] = 0;
 		// setup first and last
 		wchar_t szFirst[MAX_PATH] = {0};
 		wchar_t szLast[MAX_PATH] = {0};
-		wcsncpy(szFirst, fd.cFileName, ARRAYSIZE(szFirst));
-		wcsncpy(szLast, fd.cFileName, ARRAYSIZE(szLast));
+		wcsncpy(szFirst, fd->cFileName, ARRAYSIZE(szFirst));
+		wcsncpy(szLast, fd->cFileName, ARRAYSIZE(szLast));
 		// need to check if the first file is valid for prev/next, so jump into the loop
 		goto skipFind;
-		while(FindNextFile(hFind, &fd)) {
+		while(FindNextFile(hFind, fd)) {
 			// remove extension
-			fd.cFileName[wcslen(fd.cFileName) - 4] = 0;
+            fd->cFileName[wcslen(fd->cFileName) - 4] = 0;
 			// check first/last
-			if(_wcsicmp(fd.cFileName, szFirst) < 0) wcsncpy(szFirst, fd.cFileName, ARRAYSIZE(szFirst));
-			if(_wcsicmp(fd.cFileName, szLast) > 0) wcsncpy(szLast, fd.cFileName, ARRAYSIZE(szLast));
+			if(_wcsicmp(fd->cFileName, szFirst) < 0) wcsncpy(szFirst, fd->cFileName, ARRAYSIZE(szFirst));
+			if(_wcsicmp(fd->cFileName, szLast) > 0) wcsncpy(szLast, fd->cFileName, ARRAYSIZE(szLast));
 skipFind:	// check prev/next
-			if(szPrevious && (_wcsicmp(fd.cFileName, szPrevious) > 0 || !(*szPrevious)) && _wcsicmp(fd.cFileName, szCurrent) < 0) wcsncpy(szPrevious, fd.cFileName, MAX_PATH);
-			if(szNext && (_wcsicmp(fd.cFileName, szNext) < 0 || !(*szNext)) && _wcsicmp(fd.cFileName, szCurrent) > 0) wcsncpy(szNext, fd.cFileName, MAX_PATH);
+			if(szPrevious && (_wcsicmp(fd->cFileName, szPrevious) > 0 || !(*szPrevious)) && _wcsicmp(fd->cFileName, szCurrent) < 0) wcsncpy(szPrevious, fd->cFileName, MAX_PATH);
+			if(szNext && (_wcsicmp(fd->cFileName, szNext) < 0 || !(*szNext)) && _wcsicmp(fd->cFileName, szCurrent) > 0) wcsncpy(szNext, fd->cFileName, MAX_PATH);
 		}
-		FindClose(hFind);
+		SearchClose(hFind, fd);
 		// if current profile is first or last, then make prev/next wrap to first/last
 		if(szPrevious && !_wcsicmp(szCurrent, szFirst)) wcsncpy(szPrevious, szLast, MAX_PATH);
 		if(szNext && !_wcsicmp(szCurrent, szLast)) wcsncpy(szNext, szFirst, MAX_PATH);
 		return 0;
 	}
+    SearchClose(hFind, fd);
 	return GetLastError();
 }
 
 unsigned int CountProfileFiles(void)
 {
 	unsigned int nCount = 0;
-	WIN32_FIND_DATA fd = {0};
+	LPWIN32_FIND_DATA fd = NULL;
 	HANDLE hFind = FindProfileFiles(&fd);
-	if(hFind != INVALID_HANDLE_VALUE) {
-		nCount++;
-		while(FindNextFile(hFind, &fd))
-			nCount++;
-		FindClose(hFind);
+	if(fd &&(hFind != INVALID_HANDLE_VALUE)) {
+		++nCount;
+		while(FindNextFile(hFind, fd))
+			++nCount;
 	}
+    SearchClose(hFind, fd);
 	return nCount;
 }
 
@@ -4017,24 +4019,24 @@ void LoadPreviousProfile(void)
 int LoadProfileNumber(unsigned int nProfileNumber)
 {
 	int e = 1;
-	WIN32_FIND_DATA fd = {0};
+	LPWIN32_FIND_DATA fd = NULL;
 	HANDLE hFind = FindProfileFiles(&fd);
-	if(hFind != INVALID_HANDLE_VALUE) {
+	if(fd && (hFind != INVALID_HANDLE_VALUE)) {
 		unsigned int nCount = 0;
 		while(nCount != nProfileNumber) {
-			if(FindNextFile(hFind, &fd))
-				nCount++;
+			if(FindNextFile(hFind, fd))
+				++nCount;
 			else
 				break;
 		}
-		FindClose(hFind);
 		_ASSERT(nCount == nProfileNumber);
 		if(nCount == nProfileNumber) {
-			fd.cFileName[wcslen(fd.cFileName) - 4] = 0;
-			e = LoadProfile(fd.cFileName);
+            fd->cFileName[wcslen(fd->cFileName) - 4] = 0;
+			e = LoadProfile(fd->cFileName);
 		}
 	} else
 		e = GetLastError();
+    SearchClose(hFind, fd);
 	return e;
 }
 
@@ -4267,11 +4269,11 @@ void AboutMessage(void)
 {
 #ifdef WACUP_BUILD
 	// TODO localise
-    wchar_t message[1024] = { 0 };
-	_snwprintf(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer plug-in originally\n"
-               L"by Mike Lynch (Copyright © 2007-2018)\n\nUpdated by %s for\nWACUP (Copyright "
-               L"© 2018-%s)\n\nhttps://github.com/WACUP/vis_classic\n\nBuild date: %s",
-               WACUP_Author(), WACUP_Copyright(), TEXT(__DATE__));
+    wchar_t message[1024]/* = { 0 }*/;
+	PrintfCch(message, ARRAYSIZE(message), L"Classic Spectrum Analyzer plug-in originally\n"
+              L"by Mike Lynch (Copyright © 2007-2018)\n\nUpdated by %s for\nWACUP (Copyright "
+              L"© 2018-%s)\n\nhttps://github.com/WACUP/vis_classic\n\nBuild date: %s",
+              WACUP_Author(), WACUP_Copyright(), TEXT(__DATE__));
 	AboutMessageBox(hatan, message, L"Classic Spectrum Analyzer");
 #else
 	MessageBox(hatan, L"Classic Spectrum Analyzer\n\nCopyright © 2007 Mike Lynch\n\n"

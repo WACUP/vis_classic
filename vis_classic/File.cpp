@@ -30,9 +30,9 @@ void WritePrivateProfileInt(const wchar_t *cszSection, const wchar_t *cszKey, in
 
 void WritePrivateProfileIntArray(const wchar_t *cszSection, int *pnValues, unsigned int nSize, const wchar_t *cszFilename)
 {
+	wchar_t szKey[TEMP_STRING_LENGTH]/* = { 0 }*/;
 	for(unsigned int i = 0; i < nSize; i++)
 	{
-		wchar_t szKey[TEMP_STRING_LENGTH] = { 0 };
 		WritePrivateProfileInt(cszSection, I2WStr(i, szKey, ARRAYSIZE(szKey)), pnValues[i], cszFilename);
 	}
 }
@@ -46,9 +46,9 @@ void WritePrivateProfileColour(const wchar_t *cszSection, const wchar_t *cszKey,
 
 void WritePrivateProfileColourArray(const wchar_t *cszSection, COLORREF *pcrValues, unsigned int nSize, const wchar_t *cszFilename)
 {
+	wchar_t szKey[TEMP_STRING_LENGTH]/* = { 0 }*/;
 	for(unsigned int i = 0; i < nSize; i++)
 	{
-		wchar_t szKey[TEMP_STRING_LENGTH] = { 0 };
 		WritePrivateProfileColour(cszSection, I2WStr(i, szKey, ARRAYSIZE(szKey)), pcrValues[i], cszFilename);
 	}
 }

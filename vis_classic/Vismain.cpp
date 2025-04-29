@@ -9,6 +9,7 @@
 #include "api.h"
 #include <nu/ServiceBuilder.h>
 #include <loader/hook/get_api_service.h>
+#include <loader/loader/utils.h>
 
 // TODO add to lang.h
 // {0D1DA5F5-FD41-4934-B75A-B8455EE19F82}
@@ -46,10 +47,8 @@ __declspec( dllexport ) winampVisHeader *winampVisGetHeader(HWND hwndParent)
 		if (WASABI_API_SVC == (api_service*)1) WASABI_API_SVC = NULL;/**/
 		if (WASABI_API_SVC != NULL)
 		{
-			ServiceBuild(WASABI_API_SVC, WASABI_API_LNG, languageApiGUID);
-
 			// need to have this initialised before we try to do anything with localisation features
-			WASABI_API_START_LANG(GetMyInstance(), VisCSAGUID);
+			StartPluginLangOnly(GetMyInstance(), VisCSAGUID);
 		}
 	}
 	return &hdr;
