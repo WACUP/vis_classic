@@ -2452,7 +2452,7 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				ConfigStereo(NULL);
 				return 0;
 			case CM_PROFILES:
-				DialogBox(AtAnSt_Vis_mod.hDllInstance, MAKEINTRESOURCE(IDD_SAVEOPTIONS), hatan, (DLGPROC)SaveDialogProc);
+				DialogBoxParam(AtAnSt_Vis_mod.hDllInstance, MAKEINTRESOURCE(IDD_SAVEOPTIONS), hatan, (DLGPROC)SaveDialogProc, NULL);
 				return 0;
             case CM_FLIP:
                 bFlip = !bFlip;

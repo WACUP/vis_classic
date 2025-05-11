@@ -19,7 +19,7 @@ static const GUID VisCSAGUID =
 // use this to get our own HINSTANCE since overriding DllMain(..) causes instant crashes (should see why)
 static HINSTANCE GetMyInstance(void)
 {
-	MEMORY_BASIC_INFORMATION mbi = { 0 };
+	MEMORY_BASIC_INFORMATION mbi/* = { 0 }*/;
 	if (VirtualQuery(GetMyInstance, &mbi, sizeof(mbi)))
 	{
 		return (HINSTANCE)mbi.AllocationBase;
