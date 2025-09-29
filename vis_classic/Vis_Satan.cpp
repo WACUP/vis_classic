@@ -2434,11 +2434,14 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 			return 0;
 		case WM_WINDOWPOSCHANGED:
 			{	// update the window size
+                const int old_win_height = win_height, old_win_width = win_width;
 				RECT r = {0};
 				GetClientRect(hwnd, &r);
-				win_width = r.right - r.left;
-				win_height = r.bottom - r.top;
-                if ((win_width > 2) && (win_height > 2))
+				win_width = (r.right - r.left);
+				win_height = (r.bottom - r.top);
+                if ((win_width > 2) && (win_height > 2) &&
+                    (old_win_width != win_width) &&
+                    (old_win_height != win_height))
                 {
                     CalculateAndUpdate();
                 }
@@ -2566,7 +2569,7 @@ BOOL ConfigDialog_Common(HWND hwndDlg, UINT uMsg, WPARAM /*wParam*/, LPARAM lPar
 void SetDlgItemFloatText(HWND hwndDlg, int nDlgItem, float fValue)
 {
 	// TODO deal with localisation quirks?
-	wchar_t sz[64] = {0};
+	wchar_t sz[64]/* = {0}*/;
 	_snwprintf(sz, ARRAYSIZE(sz), L"%.2f", (double)fValue);
 	SetDlgItemText(hwndDlg, nDlgItem, sz);
 }
@@ -3580,7 +3583,7 @@ void SaveDialog_UpdateProfilesProperty(void)
 
 void SaveDialog_LoadProfile(HWND hwndDlg)
 {
-	wchar_t szProfile[cnProfileNameBufLen] = {0};
+	wchar_t szProfile[cnProfileNameBufLen]/* = {0}*/;
 	// check for text entered, and get it into selected
 	if(SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, WM_GETTEXT, cnProfileNameBufLen, (LPARAM)szProfile)) {
 		// look for exact match first
@@ -3632,7 +3635,7 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
 					if(SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_FINDSTRINGEXACT, 0, (LPARAM)szProfile) == CB_ERR)
 						SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_ADDSTRING, 0, (LPARAM)szProfile);
 					else {
-						wchar_t message[64 + cnProfileNameBufLen] = {0};
+						wchar_t message[64 + cnProfileNameBufLen]/* = {0}*/;
 						_snwprintf(message, ARRAYSIZE(message), L"Are you sure you want to overwrite\n%s?", szProfile);
 						if(MessageBox(hwndDlg, message, L"Confirm Save", MB_YESNO | MB_ICONEXCLAMATION) == IDNO)
 							bSave = false;
@@ -3652,7 +3655,7 @@ BOOL CALLBACK SaveDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM)
               if(SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, WM_GETTEXT, cnProfileNameBufLen, (LPARAM)szProfile)) {
                 // see if the entered text even matches
                 if(SendDlgItemMessage(hwndDlg, IDC_COMBOPROFILE, CB_FINDSTRINGEXACT, 0, (LPARAM)szProfile) != CB_ERR) {
-					wchar_t message[64 + cnProfileNameBufLen] = {0};
+					wchar_t message[64 + cnProfileNameBufLen]/* = {0}*/;
                   _snwprintf(message, ARRAYSIZE(message), L"Are you sure you want to delete\n%s?", szProfile);
                   if(MessageBox(hwndDlg, message, L"Confirm Delete", MB_YESNO | MB_ICONEXCLAMATION) == IDYES) {
                     DeleteProfile(szProfile);
@@ -3726,7 +3729,7 @@ BOOL CALLBACK ProfileSelectDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
             case IDC_PROFILELIST:
 			{
               // copies the selected (anchor item) text into select_profile
-			  wchar_t szProfile[MAX_PATH] = {0};
+			  wchar_t szProfile[MAX_PATH]/* = {0}*/;
               if(SendDlgItemMessage(hwndDlg, IDC_PROFILELIST, LB_GETTEXT, SendDlgItemMessage(hwndDlg, IDC_PROFILELIST, LB_GETANCHORINDEX, 0, 0), (LPARAM)szProfile) != LB_ERR) {
                 LoadTempProfile(szProfile);
 				SetDlgItemText(hwndDlg, IDC_STATICMESSAGE, szProfileMessage[0] ? szProfileMessage : cszDefaultProfileMessage);
@@ -3803,7 +3806,7 @@ void GetProfileINIFilename(wchar_t *szBuf, const wchar_t *cszProfile)
 
 void DeleteProfile(const wchar_t *cszProfile)
 {
-	wchar_t szBuf[MAX_PATH] = {0};
+	wchar_t szBuf[MAX_PATH]/* = {0}*/;
 	GetProfileINIFilename(szBuf, cszProfile);
 	if(DeleteFile(szBuf)) {
 		// profile deleted, set the profile name to current settings
@@ -3847,8 +3850,8 @@ int GetRelativeProfiles(const wchar_t *szCurrent, wchar_t *szPrevious, wchar_t *
 		// remove extension
 		fd->cFileName[wcslen(fd->cFileName) - 4] = 0;
 		// setup first and last
-		wchar_t szFirst[MAX_PATH] = {0};
-		wchar_t szLast[MAX_PATH] = {0};
+		wchar_t szFirst[MAX_PATH]/* = {0}*/;
+		wchar_t szLast[MAX_PATH]/* = {0}*/;
 		wcsncpy(szFirst, fd->cFileName, ARRAYSIZE(szFirst));
 		wcsncpy(szLast, fd->cFileName, ARRAYSIZE(szLast));
 		// need to check if the first file is valid for prev/next, so jump into the loop
@@ -3898,7 +3901,7 @@ int LoadProfileIni(const wchar_t *cszProfile)
 	AtAnSt_Vis_mod.latencyMs = ReadPrivateProfileInt(cszIniMainSection, L"Latency", 10, 0, 1000, szMainIniFilename);
     bFlip = ReadPrivateProfileBool(cszIniMainSection, L"Flip", bFlip, szMainIniFilename);
 
-	wchar_t szFilename[MAX_PATH] = {0};
+	wchar_t szFilename[MAX_PATH]/* = {0}*/;
 	GetProfileINIFilename(szFilename, cszProfile);
 	if(!FileExists(szFilename))
 		return 1;
@@ -4061,7 +4064,7 @@ int SaveProfileIni(const wchar_t *cszProfile)
 {
     WritePrivateProfileInt(cszIniMainSection, L"Latency", AtAnSt_Vis_mod.latencyMs, szMainIniFilename);
 
-	wchar_t szFilename[MAX_PATH] = {0};
+	wchar_t szFilename[MAX_PATH]/* = {0}*/;
 	GetProfileINIFilename(szFilename, cszProfile);
 
 	WritePrivateProfileInt(cszIniMainSection, L"Falloff", falloffrate, szFilename);
