@@ -1255,6 +1255,9 @@ void EraseWindow(HDC hdc)
         }
 
         if (cache_dc != NULL) {
+            SetDIBitsToDevice(cache_dc, draw_x_start, draw_y_start, draw_width, draw_height,
+                                     0, 0, 0, draw_height, rgbbuffer, &bmi, DIB_RGB_COLORS);
+
             BitBlt(hdc, 0, 0, win_width, win_height, cache_dc, 0, 0, SRCCOPY);
         }
     }
@@ -2440,8 +2443,8 @@ LRESULT CALLBACK AtAnWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 				win_width = (r.right - r.left);
 				win_height = (r.bottom - r.top);
                 if ((win_width > 2) && (win_height > 2) &&
-                    (old_win_width != win_width) &&
-                    (old_win_height != win_height))
+                    ((old_win_width != win_width) ||
+                     (old_win_height != win_height)))
                 {
                     CalculateAndUpdate();
                 }
