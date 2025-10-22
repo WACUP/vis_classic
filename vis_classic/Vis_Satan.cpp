@@ -185,6 +185,8 @@ const int cnProfileNameBufLen = MAX_PROFILE_NAME_LENGTH + 1;
 
 const int fall_speed = 5;
 
+RECT initial[2] = { 0 };
+
 api_service* WASABI_API_SVC = NULL;
 
 SETUP_API_LNG_VARS;
@@ -457,8 +459,11 @@ int AtAnStInit(winampVisModule *this_mod)
 		// if the parent is minimised then this will
 		// help to prevent it appearing on screen as
 		// it otherwise looks odd showing on its own
-		if (IsIconic(this_mod->hwndParent) &&
-			(myWindowState.wasabi_window == NULL))
+		if (IsMainMinimised()/*/IsIconic(this_mod->hwndParent)/**/
+#ifndef _WIN64
+            && !myWindowState.wasabi_window
+#endif
+            )
 		{
 			myWindowState.callback = EmbedWndCallback;
         }
@@ -517,7 +522,7 @@ int AtAnStInit(winampVisModule *this_mod)
 
 			// to better match the current visible state of WACUP it's
 			// necessary to avoid showing our window when minimised :)
-			if (!IsIconic(this_mod->hwndParent))
+			if (!IsMainMinimised()/*/IsIconic(this_mod->hwndParent)/**/)
 			{
                 ShowHideEmbeddedWindow(parent, TRUE, FALSE);
 			}
@@ -533,7 +538,11 @@ void AtAnQuit(winampVisModule *this_mod)
 	// skip saving the current window position otherwise
 	// we have the issue with windows being in the wrong
 	// places after modern -> exit -> modern -> classic
-	if (!myWindowState.wasabi_window)
+    if (
+#ifndef _WIN64
+        !myWindowState.wasabi_window &&
+#endif
+        !EqualRect(&initial[0], &myWindowState.r))
 	{
 		WritePrivateProfileInt(cszIniMainSection, L"WindowPosLeft", myWindowState.r.left, szMainIniFilename);
 		WritePrivateProfileInt(cszIniMainSection, L"WindowPosRight", myWindowState.r.right, szMainIniFilename);
@@ -4057,6 +4066,8 @@ void LoadWindowPostion(RECT *pr)
 	pr->right = GetPrivateProfileInt(cszIniMainSection, L"WindowPosRight", pr->right, szMainIniFilename);
 	pr->top = GetPrivateProfileInt(cszIniMainSection, L"WindowPosTop", pr->top, szMainIniFilename);
 	pr->bottom = GetPrivateProfileInt(cszIniMainSection, L"WindowPosBottom", pr->bottom, szMainIniFilename);
+
+    CopyRect(&initial[0], pr);
 }
 
 /*
