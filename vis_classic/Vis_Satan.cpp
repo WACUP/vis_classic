@@ -454,7 +454,7 @@ int AtAnStInit(winampVisModule *this_mod)
     // or it'll do weird things when trying to close it (aka crash)
     // otherwise have to call IPC_GET_EMBEDIF (slow) & then use the
     // returned method from it which sometimes doesn't work nicely
-    HWND parent = CreateEmbedWindow(&myWindowState, L"Classic Spectrum Analyzer");		// TODO localise
+    HWND parent = CreateEmbedWindow(&myWindowState, L"Classic Spectrum Analyzer" CREATE_EMBED_WITH_TITLE_PARAMS);		// TODO localise
 	if (IsWindow(parent)) {
 		// if the parent is minimised then this will
 		// help to prevent it appearing on screen as
